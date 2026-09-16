@@ -1,0 +1,64 @@
+{
+  "benchmark": "bandwidth",
+  "timestamp_utc": "2026-09-15T09:36:21.951175+00:00",
+  "device": {
+    "device_index": 0,
+    "device_name": "NVIDIA H20",
+    "backend": "cuda",
+    "architecture": "90",
+    "sm_count": 78,
+    "total_memory_bytes": 102077169664,
+    "l2_cache_bytes": 62914560,
+    "torch_version": "2.11.0+cu130",
+    "triton_version": "3.6.0",
+    "cuda_version": "13.0",
+    "hip_version": null
+  },
+  "arguments": {
+    "device": 0,
+    "warmup": 2.0,
+    "rep": 5.0,
+    "output": "/workspace/triton_chip_benchmarks/results/smoke_bandwidth.json",
+    "sizes_mib": [
+      8
+    ],
+    "dtype": "fp32",
+    "block_sizes": [
+      1024
+    ],
+    "num_warps": [
+      4
+    ],
+    "quick": true
+  },
+  "timing": {
+    "method": "triton.testing.do_bench; device events; cache cleared before samples",
+    "reported_statistic": "median",
+    "quantiles": [
+      0.5,
+      0.2,
+      0.8
+    ],
+    "includes": "kernel execution and device launch/event overhead",
+    "excludes": "JIT compilation, allocation, initialization and correctness checks"
+  },
+  "results": [
+    {
+      "mode": "device_global_memory_copy",
+      "dtype": "fp32",
+      "buffer_mib": 8,
+      "buffer_bytes": 8388608,
+      "elements": 2097152,
+      "traffic_bytes": 16777216,
+      "block_size": 1024,
+      "num_warps": 4,
+      "cache_regime": "cache_sensitive",
+      "median_ms": 0.010400000028312206,
+      "p20_ms": 0.010278400033712387,
+      "p80_ms": 0.01056000031530857,
+      "gbps": 1613.193841762204,
+      "tbps": 1.613193841762204,
+      "correctness": "passed (full output and masked tail)"
+    }
+  ]
+}

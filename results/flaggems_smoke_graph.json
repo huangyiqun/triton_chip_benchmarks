@@ -1,0 +1,112 @@
+{
+  "benchmark": "vector_fp32_fma",
+  "timestamp_utc": "2026-09-15T10:23:11.101754+00:00",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "NVIDIA H20",
+    "vendor_name": "nvidia",
+    "backend": "cuda",
+    "architecture": "90",
+    "sm_count": 78,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 102077169664,
+    "l2_cache_bytes": 62914560,
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.11.0+cu130",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.4.0rc1.post1+gfc5eb165a.d20260914",
+    "device_api": "torch.cuda"
+  },
+  "arguments": {
+    "device": 0,
+    "warmup": 2.0,
+    "rep": 5.0,
+    "timing": "auto",
+    "batch_ms": 10,
+    "rounds": 3,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/flaggems_smoke_graph.json",
+    "iterations": 32,
+    "blocks_per_sm": [
+      1
+    ],
+    "block_sizes": [
+      128
+    ],
+    "num_warps": [
+      4
+    ],
+    "unroll": [
+      1
+    ],
+    "quick": true
+  },
+  "timing": {
+    "provider": "flag_gems.runtime.torch_device_fn.Event",
+    "requested": "auto",
+    "methods_used": [
+      "graph"
+    ],
+    "method": "backend events around batches; elapsed / actual launch count; no cache flush",
+    "peak_statistic": "minimum sampled batch-average device time",
+    "sustained_statistic": "median sampled batch-average device time",
+    "includes": "kernel work, device scheduling and amortized event overhead; events mode additionally includes host dispatch gaps",
+    "excludes": "JIT compilation, allocation, initialization, validation, capture and warmup"
+  },
+  "results": [
+    {
+      "dtype": "float32",
+      "operation": "FMA",
+      "accumulator_chains": 8,
+      "iterations": 32,
+      "blocks_per_sm": 1,
+      "blocks": 78,
+      "block_size": 128,
+      "num_warps": 4,
+      "unroll": 1,
+      "elements_per_chain": 9984,
+      "counted_flops": 5111808,
+      "tflops": 3.636270115720095,
+      "peak_tflops": 3.637104102136128,
+      "smoke_only": true,
+      "median_ms": 0.00140578335418509,
+      "p20_ms": 0.0014056543859486616,
+      "p80_ms": 0.0014059526493927694,
+      "min_ms": 0.0014054610086628413,
+      "max_ms": 0.001406307334563594,
+      "timing_method": "graph",
+      "timing_requested": "auto",
+      "timing_fallback_reason": null,
+      "samples_ms_per_launch": [
+        0.0014058639781000632,
+        0.0014057027302701167,
+        0.0014054610086628413,
+        0.00140578335418509,
+        0.001406307334563594
+      ],
+      "launches_per_batch": 794,
+      "batch_samples_ms": [
+        1.1162559986114502,
+        1.1161279678344727,
+        1.115936040878296,
+        1.1161919832229614,
+        1.1166080236434937
+      ],
+      "sample_count": 5,
+      "measured_total_ms": 5.581120014190674,
+      "graph_api": "CUDAGraph",
+      "correctness": "all elements passed analytic FP64 reference and finite check",
+      "max_abs_error": 9.809358123558098e-07,
+      "max_abs_tolerance": 7.722181184712963e-06,
+      "reference_device": "cuda:0",
+      "registers_per_thread": 32,
+      "register_spills": 0,
+      "assembly_check": "passed (FP32 FMA; no tensor instructions)",
+      "ptx_fp32_fma_instruction_sites": 256,
+      "ptx_contains_tensor_instructions": false
+    }
+  ]
+}

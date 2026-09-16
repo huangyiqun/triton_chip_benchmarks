@@ -1,0 +1,379 @@
+{
+  "benchmark": "tensor",
+  "timestamp_utc": "2026-09-15T09:38:21.662073+00:00",
+  "device": {
+    "device_index": 0,
+    "device_name": "NVIDIA H20",
+    "backend": "cuda",
+    "architecture": "90",
+    "sm_count": 78,
+    "total_memory_bytes": 102077169664,
+    "l2_cache_bytes": 62914560,
+    "torch_version": "2.11.0+cu130",
+    "triton_version": "3.6.0",
+    "cuda_version": "13.0",
+    "hip_version": null
+  },
+  "arguments": {
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp16",
+    "quick": false,
+    "device": 0,
+    "warmup": 25,
+    "rep": 100,
+    "output": "/workspace/triton_chip_benchmarks/results/h20_tensor.json"
+  },
+  "timing": {
+    "method": "triton.testing.do_bench; device events; cache cleared before samples",
+    "reported_statistic": "median",
+    "quantiles": [
+      0.5,
+      0.2,
+      0.8
+    ],
+    "includes": "kernel execution and device launch/event overhead",
+    "excludes": "JIT compilation, allocation, initialization and correctness checks"
+  },
+  "results": [
+    {
+      "m": 2048,
+      "n": 2048,
+      "k": 2048,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 17179869184,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 1.71661376953125e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 114.9862754693088,
+      "median_ms": 0.1494079977273941,
+      "p20_ms": 0.14927999675273895,
+      "p80_ms": 0.14956800639629364
+    },
+    {
+      "m": 2048,
+      "n": 2048,
+      "k": 2048,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 17179869184,
+      "config": {
+        "block_m": 128,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 1.71661376953125e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 98.8348527424893,
+      "median_ms": 0.1738239973783493,
+      "p20_ms": 0.1735360026359558,
+      "p80_ms": 0.1740799993276596
+    },
+    {
+      "m": 2048,
+      "n": 2048,
+      "k": 2048,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 17179869184,
+      "config": {
+        "block_m": 128,
+        "block_n": 256,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 1.71661376953125e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 98.27401056835883,
+      "median_ms": 0.17481599748134613,
+      "p20_ms": 0.1746560037136078,
+      "p80_ms": 0.17500799894332886
+    },
+    {
+      "m": 2048,
+      "n": 2048,
+      "k": 2048,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 17179869184,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 4
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 1.71661376953125e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 111.73171868620206,
+      "median_ms": 0.15376000106334686,
+      "p20_ms": 0.15343999862670898,
+      "p80_ms": 0.15401600301265717
+    },
+    {
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 137438953472,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 4.1484832763671875e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 121.20008496219225,
+      "median_ms": 1.1339839696884155,
+      "p20_ms": 1.1317888021469116,
+      "p80_ms": 1.1345152139663697
+    },
+    {
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 137438953472,
+      "config": {
+        "block_m": 128,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 4.1484832763671875e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 118.71765337468864,
+      "median_ms": 1.157696008682251,
+      "p20_ms": 1.1559040546417236,
+      "p80_ms": 1.1580159664154053
+    },
+    {
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 137438953472,
+      "config": {
+        "block_m": 128,
+        "block_n": 256,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 4.1484832763671875e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 118.11041859182993,
+      "median_ms": 1.163648009300232,
+      "p20_ms": 1.1632000207901,
+      "p80_ms": 1.1639679670333862
+    },
+    {
+      "m": 4096,
+      "n": 4096,
+      "k": 4096,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 137438953472,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 4
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 4.1484832763671875e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 119.20199989773023,
+      "median_ms": 1.1529920101165771,
+      "p20_ms": 1.151968002319336,
+      "p80_ms": 1.1539839506149292
+    },
+    {
+      "m": 8192,
+      "n": 8192,
+      "k": 8192,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 1099511627776,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 32,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 7.486343383789062e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 129.2920051400544,
+      "median_ms": 8.504096031188965,
+      "p20_ms": 8.502880096435547,
+      "p80_ms": 8.517696380615234
+    },
+    {
+      "m": 8192,
+      "n": 8192,
+      "k": 8192,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 1099511627776,
+      "config": {
+        "block_m": 128,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 7.486343383789062e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 125.21908093003458,
+      "median_ms": 8.7807035446167,
+      "p20_ms": 8.773887634277344,
+      "p80_ms": 8.782367706298828
+    },
+    {
+      "m": 8192,
+      "n": 8192,
+      "k": 8192,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 1099511627776,
+      "config": {
+        "block_m": 128,
+        "block_n": 256,
+        "block_k": 64,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 7.486343383789062e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 125.13242686356598,
+      "median_ms": 8.786784172058105,
+      "p20_ms": 8.784383773803711,
+      "p80_ms": 8.801471710205078
+    },
+    {
+      "m": 8192,
+      "n": 8192,
+      "k": 8192,
+      "dtype": "fp16",
+      "accumulator_dtype": "fp32",
+      "output_dtype": "fp32",
+      "flops": 1099511627776,
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 4
+      },
+      "status": "ok",
+      "correctness": {
+        "passed": true,
+        "max_abs_error": 7.486343383789062e-05,
+        "rtol": 0.002,
+        "atol": 0.002,
+        "reference": "FP32 torch.matmul (TF32 disabled)"
+      },
+      "tflops": 127.63315320373796,
+      "median_ms": 8.6146240234375,
+      "p20_ms": 8.612959861755371,
+      "p80_ms": 8.61683177947998
+    }
+  ]
+}
