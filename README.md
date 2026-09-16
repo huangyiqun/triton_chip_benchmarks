@@ -150,12 +150,12 @@ The "measured peak" is the best result from the current sweep. It does not guara
 
 ## Result Files
 
-FlagGems regression records use `results/flaggems_*.json`. Files matching `results/h20_peak_*.json` and `results/h20_gpu1_peak_*.json` contain peak measurements from before FlagGems integration. The older `h20_tensor.json`, `h20_vector.json`, and `h20_bandwidth.json` retain sustained-throughput results from the initial version. Interpret results in the context of each version's timing path, workload, and parameters. Historical H20 results do not imply that other chips have been tested.
+FlagGems regression records use `results/flaggems_*.json`. The four FP32/TF32 records documented below also use FlagGems. All other files matching `results/h20_peak_*.json` and `results/h20_gpu1_peak_*.json` contain peak measurements from before FlagGems integration. The original `h20_tensor.json`, `h20_vector.json`, and `h20_bandwidth.json` retain sustained-throughput results from the initial version. Interpret results in the context of each version's timing path, workload, and parameters. Historical H20 results do not imply that other chips have been tested.
 
 ### Backend Portability Validation
 
 - 30 CPU-only runtime and precision tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, event timing without graphs, missing properties and FP64 capabilities, precision-setting restoration, timing normalization, and error handling. They also check FP32 CLI defaults, explicit precision forwarding in both launch paths, precision-probe fallback rejection, and instruction-audit classification and rejection rules. Any access to `torch.cuda` fails immediately in the runtime tests.
-- H20 hardware tests cover both FlagGems graph and ordinary event paths, FP16/FP8 tensor operations, GEMM tail tiles, vector operations, copy/read modes, and the branch that forces CPU FP64 references.
+- H20 hardware tests cover both FlagGems graph and ordinary event paths, FP16/FP8/IEEE FP32/TF32 matrix operations, GEMM tail tiles, vector operations, copy/read modes, and the branch that forces CPU FP64 references.
 - These checks validate the runtime adaptation and NVIDIA regression paths; they do not establish hardware validation of kernels for every vendor.
 
 ```bash
@@ -163,6 +163,33 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 python bench_vector.py --quick --timing auto --warmup 2 --rep 5 --rounds 3
 python bench_vector.py --quick --timing events --warmup 2 --rep 5 --rounds 3
 ```
+
+### H20 IEEE FP32 and TF32 Measurements on 2026-09-16
+
+GPU 1 was idle before the run and was selected from eight H20 devices. Both full sweeps used FlagGems graph execution with device-event timing, 1024 resident dot iterations, 100 ms of warmup, an approximately 200 ms measurement budget, and at least 10 measured batches. All 28 full-sweep configurations passed the numerical checks, precision probe, and instruction audit with zero register spills. The selected configurations were then repeated independently with 4096 iterations.
+
+| Math mode | Full-sweep peak | Full-sweep median at that configuration | 4096-iteration peak | 4096-iteration median |
+| --- | ---: | ---: | ---: | ---: |
+| IEEE FP32 matrix (`fma.rn.f32`, SIMT) | 28.79 TFLOP/s | 28.78 TFLOP/s | **28.81 TFLOP/s** | 28.80 TFLOP/s |
+| TF32 tensor (`wgmma...tf32`) | 70.39 TFLOP/s | 70.36 TFLOP/s | **70.62 TFLOP/s** | 70.59 TFLOP/s |
+
+The IEEE FP32 path compiled to ordinary FP32 FMA instructions on this H20, so it is matrix throughput rather than a native tensor-core result. Its selected configuration was tile `64×64×32`, `8 blocks/SM`, and 4096 iterations. TF32 compiled to `wgmma.mma_async.sync.aligned.m64n128k8.f32.tf32.tf32`; its selected configuration was tile `64×128×32`, `2 blocks/SM`, and 4096 iterations.
+
+```bash
+python bench_tensor.py --device 1 --dtype fp32 --input-precision ieee \
+  --output results/h20_peak_tensor_fp32_ieee.json
+python bench_tensor.py --device 1 --dtype fp32 --input-precision tf32 \
+  --output results/h20_peak_tensor_tf32.json
+
+python bench_tensor.py --device 1 --dtype fp32 --input-precision ieee \
+  --iterations 4096 --blocks-per-sm 8 \
+  --output results/h20_selected_tensor_fp32_ieee.json
+python bench_tensor.py --device 1 --dtype fp32 --input-precision tf32 \
+  --iterations 4096 --blocks-per-sm 2 \
+  --output results/h20_selected_tensor_tf32.json
+```
+
+Raw records: [IEEE FP32 full sweep](results/h20_peak_tensor_fp32_ieee.json), [TF32 full sweep](results/h20_peak_tensor_tf32.json), [IEEE FP32 selected validation](results/h20_selected_tensor_fp32_ieee.json), and [TF32 selected validation](results/h20_selected_tensor_tf32.json).
 
 ### Historical H20 Measurements on 2026-09-15
 
