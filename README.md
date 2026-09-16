@@ -1,6 +1,6 @@
 # Triton Chip Peak Throughput Benchmarks
 
-Three standalone programs measure tensor matrix units, vector FP32 multiply-add throughput, and HBM/device-memory bandwidth. They sweep configurations to find **the highest throughput observed on the current device under the current operating conditions**, while reporting the median for the same configuration to help assess stability. Precision, dense or sparse execution, clock frequency, and access patterns affect peak throughput, so these measurements are reported separately.
+Three standalone programs measure matrix/tensor throughput, vector FP32 multiply-add throughput, and HBM/device-memory bandwidth. They sweep configurations to find **the highest throughput observed on the current device under the current operating conditions**, while reporting the median for the same configuration to help assess stability. Precision, execution units, dense or sparse execution, clock frequency, and access patterns affect peak throughput, so these measurements are reported separately.
 
 ## Running the Benchmarks
 
@@ -18,7 +18,7 @@ Runtime operations use FlagGems backend management, with no direct calls to `tor
 
 Device type and vendor are handled separately: multiple vendors may use the `cuda` device name, and NVIDIA-specific options are enabled only when `vendor_name == "nvidia"`. FlagGems detects the hardware automatically by default. To select a vendor explicitly, use its environment variable, for example `GEMS_VENDOR=ascend python bench_vector.py --quick`. The corresponding device backend must already be installed; setting the environment variable does not emulate hardware.
 
-The same programs can use the device module detected by FlagGems. The kernels still require the target Triton backend to support operations such as `tl.dot` and `tl.fma`, along with the selected dtype. FP8 uses E4M3FN and is not automatically replaced with another FP8 format. Validation currently includes H20 hardware regression tests and simulated runtime tests without CUDA. Kernels have not yet been validated on other chips. [FlagGems backend interface documentation](https://github.com/flagos-ai/FlagGems/blob/master/src/flag_gems/runtime/backend/README.md)
+The same programs can use the device module detected by FlagGems. The kernels still require the target Triton backend to support operations such as `tl.dot` and `tl.fma`, along with the selected dtype and input-precision mode. FP8 uses E4M3FN and is not automatically replaced with another FP8 format. TF32 requires backend support and is not silently replaced with IEEE FP32 or another math mode. Validation currently includes H20 hardware regression tests and simulated runtime tests without CUDA. Kernels have not yet been validated on other chips. [FlagGems backend interface documentation](https://github.com/flagos-ai/FlagGems/blob/master/src/flag_gems/runtime/backend/README.md)
 
 ```bash
 cd /workspace/triton_chip_benchmarks
@@ -27,22 +27,30 @@ cd /workspace/triton_chip_benchmarks
 python bench_tensor.py --dtype fp16 --output results/peak_tensor_fp16.json
 python bench_tensor.py --dtype bf16 --output results/peak_tensor_bf16.json
 python bench_tensor.py --dtype fp8  --output results/peak_tensor_fp8.json
+python bench_tensor.py --dtype fp32 --input-precision ieee --output results/peak_matrix_fp32_ieee.json
+python bench_tensor.py --dtype fp32 --input-precision tf32 --output results/peak_tensor_tf32.json
 python bench_vector.py --output results/peak_vector.json
-python bench_bandwidth.py --output results/peak_bandwidth.json
+python bench_bandwidth.py --dtype fp32 --output results/peak_bandwidth.json
 ```
 
 All programs support `--device 0`, `--output file.json`, and `--help`. Add `--quick --warmup 2 --rep 5 --rounds 3` for a smoke test; results from these small workloads are not used to establish peak throughput.
 
 Missing device properties are not filled with specifications from another chip. If available memory is unknown, the preallocation check is skipped. If the compute-unit count is unknown, tensor/vector benchmarks accept `--compute-units count`; if L2 capacity is unknown, supply the actual value with `--l2-mib capacity`. The bandwidth benchmark does not depend on the compute-unit count. Measurements with unknown L2 capacity are still reported, but excluded from the HBM peak summary.
 
-## 1. Tensor: Repeated Matrix Multiply-Add with Resident Operands
+## 1. Matrix/Tensor: Repeated Multiply-Add with Resident Operands
 
 `bench_tensor.py` defaults to `--mode peak`: each program loads its operands from device memory once, repeatedly executes `tl.dot` in a loop with two independent accumulator chains, and writes all results at the end. Increasing the ratio of computation to memory traffic and varying the tile shape and programs per SM helps find the throughput limit of the compute units.
 
-- FP16, BF16, and FP8 E4M3FN are tested separately; all outputs are FP32.
+- FP16, BF16, FP8 E4M3FN, IEEE FP32, and TF32 are tested separately; all outputs are FP32.
+- `--dtype fp32` selects FP32 input storage and defaults to `--input-precision ieee`. Use `--dtype fp32 --input-precision tf32` for TF32 multiplication with FP32 accumulation. TF32 is a math mode, not a separate storage dtype. `--input-precision` is valid only with `--dtype fp32`.
+- TF32 applies only to matrix `tl.dot` operations. The vector benchmark remains IEEE FP32 FMA, and the bandwidth benchmark moves FP32 storage when `--dtype fp32` is selected.
+- IEEE FP32 may use scalar/vector FMA instructions (SIMT) on NVIDIA. Such results are labeled **IEEE FP32 matrix throughput**, without claiming a tensor-core peak. Backends with native FP32 matrix instructions may use those instead.
 - The backend's native accumulation policy is used. FP32 output does not imply that internal accumulation always has full IEEE FP32 precision. On H20, forcing `max_num_imprecise_acc=0` falls back to FP16 instructions, so that path is not labeled as an FP8 peak measurement.
-- All outputs are validated numerically. NVIDIA/AMD kernels also undergo native MMA instruction checks; an FP8 kernel lowered to another dtype is not labeled as a native peak result. Other vendors can run, but results are labeled `native execution unverified` rather than claiming instruction verification. Missing register/spill attributes are recorded as `null`.
-- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. NVIDIA/AMD sweep three tile shapes, while other vendors use two smaller shapes, combined with `1, 2, 4, 8 blocks/SM`. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
+- All outputs are validated numerically. FP32 runs also perform an untimed precision probe using `1 + 2^-12`, `1 + 2^-9`, and `2^20` in `A` with an identity matrix `B`. The first value distinguishes IEEE FP32 from TF32, the second rejects a BF16 fallback, and the third rejects an FP16 fallback. This validates the requested math mode even though the exact-check inputs used for peak timing are representable in all of them. The run stops if compilation rejects the requested mode or this probe disagrees with it.
+- NVIDIA/AMD instruction audits distinguish matrix instructions from SIMT FMA and check the requested FP32 precision. A native TF32 result requires recognized TF32/XF32 matrix instructions; an FP8 kernel lowered to another dtype is not labeled as a native FP8 peak. For other vendors, the FP32 precision probe still runs, but execution units and instruction precision are marked unverified. Missing register/spill attributes are recorded as `null`.
+- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
+
+JSON records `input_storage_dtype`, `dot_input_precision`, and `math_mode` separately. Compiled-kernel metadata distinguishes `execution_kind`, `instruction_precision_verified`, and `native_tensor_verified`: a successful SIMT instruction audit does not imply tensor execution. Compare peak results within the same math mode and execution category.
 
 ```text
 FLOPs = 2 × tile_M × tile_N × tile_K × iterations × chains × blocks
@@ -54,9 +62,11 @@ Median TFLOP/s = FLOPs / (median_ms × 10^9)
 
 ```bash
 python bench_tensor.py --mode gemm --dtype fp16 --sizes 2048 4096 8192
+python bench_tensor.py --mode gemm --dtype fp32 --input-precision ieee --sizes 2048 4096 8192
+python bench_tensor.py --mode gemm --dtype fp32 --input-precision tf32 --sizes 2048 4096 8192
 ```
 
-GEMM counts `2*M*N*K` FLOPs and supports FP16/BF16. Extra operations caused by padding are excluded from useful FLOPs.
+Both `--mode peak` and `--mode gemm` support IEEE FP32 and TF32. GEMM also supports FP16/BF16; FP8 remains available only in peak mode. GEMM counts `2*M*N*K` FLOPs, excluding extra operations caused by padding. FP32 precision probes and NVIDIA/AMD instruction audits apply to both modes. GEMM uses a larger numerical tolerance for TF32 to account for its reduced input precision.
 
 ## 2. Vector: Independent FP32 FMA Chains
 
@@ -144,17 +154,19 @@ FlagGems regression records use `results/flaggems_*.json`. Files matching `resul
 
 ### Backend Portability Validation
 
-- 21 CPU-only runtime tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, event timing without graphs, missing properties and FP64 capabilities, precision-setting restoration, timing normalization, and error handling. Any access to `torch.cuda` fails immediately in these tests.
+- 30 CPU-only runtime and precision tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, event timing without graphs, missing properties and FP64 capabilities, precision-setting restoration, timing normalization, and error handling. They also check FP32 CLI defaults, explicit precision forwarding in both launch paths, precision-probe fallback rejection, and instruction-audit classification and rejection rules. Any access to `torch.cuda` fails immediately in the runtime tests.
 - H20 hardware tests cover both FlagGems graph and ordinary event paths, FP16/FP8 tensor operations, GEMM tail tiles, vector operations, copy/read modes, and the branch that forces CPU FP64 references.
 - These checks validate the runtime adaptation and NVIDIA regression paths; they do not establish hardware validation of kernels for every vendor.
 
 ```bash
-python -m unittest discover -s tests -p 'test_runtime.py' -v
+python -m unittest discover -s tests -p 'test_*.py' -v
 python bench_vector.py --quick --timing auto --warmup 2 --rep 5 --rounds 3
 python bench_vector.py --quick --timing events --warmup 2 --rep 5 --rounds 3
 ```
 
-### H20 Measurements on 2026-09-15
+### Historical H20 Measurements on 2026-09-15
+
+These historical records cover the original FP16/BF16/FP8 tensor modes. They predate the IEEE FP32 and TF32 matrix modes and do not include measurements for those additions.
 
 GPU 0 completed a full sweep of 108 configurations: 12 for each of three tensor precisions, 24 for vector throughput, and 48 for bandwidth. All passed validation. GPU 1 ran 18 additional checks of selected configurations, using a longer 4096-iteration loop for tensor measurements. Device indices, parameters, and raw timing for every batch are saved in JSON.
 
