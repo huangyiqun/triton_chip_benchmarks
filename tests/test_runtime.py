@@ -10,6 +10,7 @@ from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 import importlib.util
 import io
+import math
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
@@ -41,14 +42,17 @@ class FakeAccelerator:
 
     kernel_ms = 0.25
 
-    def __init__(self, device_type="npu", graph_name=None, properties=None, memory=None):
+    def __init__(self, device_type="npu", graph_name=None, properties=None, memory=None,
+                 event_resolution_ms=None):
         self.device_type = device_type
+        self.event_resolution_ms = event_resolution_ms
         self.now_ms = 0.0
         self.synchronized_ms = 0.0
         self.selected_device = 0
         self.synchronize_calls = 0
         self.elapsed_time_calls = 0
         self.replay_calls = 0
+        self.graph_replay_kernel_ms = None
         self.capturing = None
         self.active_stream = None
         if properties is not None:
@@ -64,7 +68,9 @@ class FakeAccelerator:
 
                 def replay(self):
                     api.replay_calls += 1
-                    api.now_ms += self.launches * api.kernel_ms
+                    kernel_ms = (api.kernel_ms if api.graph_replay_kernel_ms is None
+                                 else api.graph_replay_kernel_ms)
+                    api.now_ms += self.launches * kernel_ms
 
             DeviceGraph.__name__ = graph_name
             setattr(self, graph_name, DeviceGraph)
@@ -104,7 +110,11 @@ class FakeAccelerator:
                 if api.synchronized_ms < end.timestamp_ms:
                     raise AssertionError("Read elapsed time before device completion")
                 api.elapsed_time_calls += 1
-                return end.timestamp_ms - self.timestamp_ms
+                elapsed = end.timestamp_ms - self.timestamp_ms
+                if api.event_resolution_ms is not None:
+                    return (math.floor(elapsed / api.event_resolution_ms)
+                            * api.event_resolution_ms)
+                return elapsed
 
         return DeviceEvent()
 
@@ -293,6 +303,28 @@ class RuntimeTests(unittest.TestCase):
                 raise ValueError("reference failed")
         self.assertTrue(matmul.allow_tf32)
 
+    def test_precision_context_prefers_modern_api_without_deprecated_access(self):
+        self.configure()
+
+        class ModernMatmul:
+            fp32_precision = "tf32"
+
+            @property
+            def allow_tf32(self):
+                raise AssertionError("Deprecated getter must not be accessed")
+
+            @allow_tf32.setter
+            def allow_tf32(self, value):
+                raise AssertionError("Deprecated setter must not be accessed")
+
+        matmul = ModernMatmul()
+        common.flag_gems.runtime.torch_backend_device = SimpleNamespace(matmul=matmul)
+        with self.assertRaisesRegex(ValueError, "reference failed"):
+            with common.full_precision_matmul():
+                self.assertEqual(matmul.fp32_precision, "ieee")
+                raise ValueError("reference failed")
+        self.assertEqual(matmul.fp32_precision, "tf32")
+
     def test_graph_aliases_use_vendor_api_without_cuda(self):
         cases = (("npu", "ascend", "NPUGraph"), ("mlu", "cambricon", "MLUGraph"),
                  ("musa", "mthreads", "MUSAGraph"))
@@ -341,6 +373,45 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result["timing_method"], "events")
         self.assertEqual(result["median_ms"], api.kernel_ms)
 
+    def test_coarse_event_timer_expands_initial_calibration_batch(self):
+        api = self.configure(FakeAccelerator(event_resolution_ms=1.0))
+        api.kernel_ms = 0.01
+        result = self.measure(api, timing="events")
+        self.assertGreater(result["calibration_launches"], 5)
+        self.assertGreaterEqual(result["launches_per_batch"],
+                                result["calibration_launches"])
+        self.assertTrue(all(sample > 0 for sample in result["samples_ms_per_launch"]))
+        relative_error = abs(result["median_ms"] - api.kernel_ms) / api.kernel_ms
+        self.assertLess(relative_error, 0.05)
+
+    def test_event_timer_too_coarse_for_peak_measurement_is_rejected(self):
+        api = self.configure(FakeAccelerator(event_resolution_ms=10.0))
+        api.kernel_ms = 0.01
+        with self.assertRaisesRegex(RuntimeError, "resolution is too coarse"):
+            self.measure(api, timing="events")
+
+    def test_resolved_initial_estimate_does_not_force_five_launch_batches(self):
+        api = self.configure()
+        api.kernel_ms = 5.0
+        result = self.measure(api, timing="events")
+        self.assertEqual(result["calibration_launches"], 5)
+        self.assertEqual(result["launches_per_batch"], 1)
+        self.assertEqual(result["median_ms"], api.kernel_ms)
+
+    def test_event_reads_use_full_backend_synchronization(self):
+        api = self.configure()
+        original_event = api.Event
+
+        def event_with_noop_synchronize(**kwargs):
+            event = original_event(**kwargs)
+            event.synchronize = lambda: None
+            return event
+
+        api.Event = event_with_noop_synchronize
+        result = self.measure(api, timing="events")
+        self.assertEqual(result["median_ms"], api.kernel_ms)
+        self.assertGreater(api.synchronize_calls, 0)
+
     def test_present_but_unimplemented_graph_reports_auto_fallback_reason(self):
         api = self.configure(FakeAccelerator("npu", "NPUGraph"))
 
@@ -352,6 +423,27 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result["timing_method"], "events")
         self.assertIn("SDK build", result["timing_fallback_reason"])
         self.assertEqual(result["median_ms"], api.kernel_ms)
+
+    def test_zero_graph_timestamps_auto_fall_back_to_event_batches(self):
+        api = self.configure(FakeAccelerator("npu", "NPUGraph"))
+        api.graph_replay_kernel_ms = 0.0
+        result = self.measure(api)
+        self.assertEqual(result["timing_method"], "events")
+        self.assertIn("graph timing", result["timing_fallback_reason"])
+        self.assertEqual(result["median_ms"], api.kernel_ms)
+        self.assertGreater(api.replay_calls, 0)
+
+    def test_coarse_graph_timer_establishes_resolution_floor(self):
+        api = self.configure(FakeAccelerator(
+            "npu", "NPUGraph", event_resolution_ms=1.0))
+        api.kernel_ms = 0.25
+        api.graph_replay_kernel_ms = 0.01
+        result = self.measure(api)
+        self.assertEqual(result["timing_method"], "graph")
+        self.assertGreater(result["minimum_resolved_batch_ms"], 0)
+        relative_error = abs(result["median_ms"] - api.graph_replay_kernel_ms)
+        relative_error /= api.graph_replay_kernel_ms
+        self.assertLess(relative_error, 0.05)
 
     def test_graph_out_of_memory_is_not_hidden_as_a_capability_fallback(self):
         api = self.configure(FakeAccelerator("npu", "NPUGraph"))
@@ -399,6 +491,13 @@ class RuntimeTests(unittest.TestCase):
                 api.kernel_ms = invalid
                 with self.assertRaisesRegex(RuntimeError, "[Ii]nvalid.*event"):
                     self.measure(api, timing="events")
+
+    def test_persistent_zero_on_kunlunxin_reports_required_event_setting(self):
+        api = self.configure(vendor="kunlunxin")
+        api.kernel_ms = 0.0
+        with mock.patch.dict(common.os.environ, {}, clear=True), \
+             self.assertRaisesRegex(RuntimeError, "XPU_EVENT_KL3_ENABLE=1"):
+            self.measure(api, timing="events")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 import json
 import math
+import os
 from pathlib import Path
 import statistics
 
@@ -71,15 +72,30 @@ def full_precision_matmul():
     """Temporarily disable TF32 through FlagGems' backend settings, if exposed."""
     backend = getattr(get_flag_gems().runtime, "torch_backend_device", None)
     matmul = getattr(backend, "matmul", None)
-    if matmul is None or not hasattr(matmul, "allow_tf32"):
+    if matmul is None:
         yield
         return
-    previous = matmul.allow_tf32
-    matmul.allow_tf32 = False
+
+    # PyTorch 2.9 deprecated allow_tf32 in favor of the string-valued
+    # fp32_precision setting. Probe the modern API first without touching the
+    # deprecated property, whose getter alone emits a warning.
+    try:
+        previous = matmul.fp32_precision
+    except AttributeError:
+        try:
+            previous = matmul.allow_tf32
+        except AttributeError:
+            yield
+            return
+        setting, full_precision = "allow_tf32", False
+    else:
+        setting, full_precision = "fp32_precision", "ieee"
+
+    setattr(matmul, setting, full_precision)
     try:
         yield
     finally:
-        matmul.allow_tf32 = previous
+        setattr(matmul, setting, previous)
 
 
 def positive_int(value):
@@ -226,6 +242,11 @@ class GraphUnavailable(RuntimeError):
     """The active backend does not offer a usable graph capture implementation."""
 
 
+_INITIAL_CALIBRATION_LAUNCHES = 5
+_MAX_BATCH_LAUNCHES = 2048
+_MIN_RESOLVED_EVENT_TICKS = 20
+
+
 def _graph_factory(api, device_type):
     if not all(callable(getattr(api, name, None)) for name in ("graph", "Stream", "stream")):
         return None, None
@@ -249,19 +270,64 @@ def _stream_context(api):
     return nullcontext()
 
 
-def _event_elapsed(api, start, end, submit):
+def _zero_event_error(launches=None):
+    gems = get_flag_gems()
+    workload = f" for {launches} launches" if launches is not None else ""
+    message = (f"Invalid backend event time: 0 ms{workload} on "
+               f"{gems.vendor_name}/{gems.device}; timed events are unavailable, "
+               "disabled, or too coarse for this workload")
+    if gems.vendor_name == "kunlunxin":
+        if os.environ.get("XPU_EVENT_KL3_ENABLE") != "1":
+            message += ("; FlagGems' KunlunXin setup exports XPU_EVENT_KL3_ENABLE=1, "
+                        "so set it before starting Python and retry")
+        else:
+            message += "; verify the KunlunXin SDK, driver, and event implementation"
+    return RuntimeError(message)
+
+
+def _event_elapsed(api, start, end, submit, *, allow_zero=False):
     start.record()
     submit()
     end.record()
-    synchronize = getattr(end, "synchronize", None)
-    if callable(synchronize):
-        synchronize()
-    else:
-        api.synchronize()
+    # Use the FlagGems device-level synchronization path, matching Triton's
+    # backend-neutral benchmark flow before it reads elapsed event time.
+    api.synchronize()
     elapsed = float(start.elapsed_time(end))
-    if not math.isfinite(elapsed) or elapsed <= 0:
-        raise RuntimeError("Invalid backend event time; increase the workload/--batch-ms")
+    if not math.isfinite(elapsed) or elapsed < 0:
+        raise RuntimeError(f"Invalid backend event time: {elapsed!r} ms")
+    if elapsed == 0 and not allow_zero:
+        raise _zero_event_error()
     return elapsed
+
+
+def _next_launch_count(launches):
+    return min(_MAX_BATCH_LAUNCHES, launches * 2)
+
+
+def _coarse_event_error(launches, elapsed_ms, required_ms):
+    gems = get_flag_gems()
+    return RuntimeError(
+        f"Backend event resolution is too coarse on {gems.vendor_name}/{gems.device}: "
+        f"{launches} launches measured {elapsed_ms:g} ms, but at least "
+        f"{required_ms:g} ms is needed for a reliable peak measurement")
+
+
+def _calibrate_events(api, start, end, direct):
+    """Find a direct-launch batch large enough for the event timer to resolve."""
+    launches = _INITIAL_CALIBRATION_LAUNCHES
+    saw_zero = False
+    while True:
+        elapsed = _event_elapsed(
+            api, start, end, lambda: direct(launches), allow_zero=True)
+        if elapsed > 0:
+            minimum_launches = launches if saw_zero else 1
+            minimum_batch_ms = (elapsed * _MIN_RESOLVED_EVENT_TICKS
+                                if saw_zero else 0.0)
+            return elapsed / launches, launches, minimum_launches, minimum_batch_ms
+        if launches == _MAX_BATCH_LAUNCHES:
+            raise _zero_event_error(launches)
+        saw_zero = True
+        launches = _next_launch_count(launches)
 
 
 def _batch_samples(fn, args, use_graph):
@@ -277,9 +343,12 @@ def _batch_samples(fn, args, use_graph):
             for _ in range(count):
                 fn()
 
-        estimate_ms = max(_event_elapsed(api, start, end, lambda: direct(5)) / 5, 0.001)
+        (estimate_ms, calibration_launches, minimum_launches,
+         minimum_batch_ms) = _calibrate_events(api, start, end, direct)
+        estimate_ms = max(estimate_ms, 0.001)
         target_ms = min(args.batch_ms, args.rep / args.rounds)
-        launches = max(1, min(2048, math.ceil(target_ms / estimate_ms)))
+        launches = max(minimum_launches,
+                       min(_MAX_BATCH_LAUNCHES, math.ceil(target_ms / estimate_ms)))
 
         def build_submit(count):
             if not use_graph:
@@ -299,25 +368,61 @@ def _batch_samples(fn, args, use_graph):
                 raise
             return captured.replay  # Bound method keeps the captured graph alive.
 
-        submit = build_submit(launches)
-        batch_ms = _event_elapsed(api, start, end, submit)
+        def time_batch(count, *, zero_seen=False):
+            nonlocal minimum_batch_ms
+            while True:
+                submission = build_submit(count)
+                elapsed = _event_elapsed(
+                    api, start, end, submission, allow_zero=True)
+                if elapsed > 0 and zero_seen and minimum_batch_ms == 0:
+                    minimum_batch_ms = elapsed * _MIN_RESOLVED_EVENT_TICKS
+                if elapsed > 0 and elapsed >= minimum_batch_ms:
+                    return count, submission, elapsed
+                if count == _MAX_BATCH_LAUNCHES:
+                    error = (_zero_event_error(count) if elapsed == 0 else
+                             _coarse_event_error(count, elapsed, minimum_batch_ms))
+                    if use_graph:
+                        raise GraphUnavailable(f"{gems.vendor_name} graph timing: {error}")
+                    raise error
+                zero_seen = zero_seen or elapsed == 0
+                count = _next_launch_count(count)
+
+        launches, submit, batch_ms = time_batch(launches)
         for _ in range(2):
-            refined = max(1, min(2048, math.ceil(launches * target_ms / batch_ms)))
+            refined = max(minimum_launches,
+                          min(_MAX_BATCH_LAUNCHES,
+                              math.ceil(launches * target_ms / batch_ms)))
             if refined == launches or 0.5 * target_ms <= batch_ms <= 2 * target_ms:
                 break
-            launches = refined
-            submit = build_submit(launches)
-            batch_ms = _event_elapsed(api, start, end, submit)
+            launches, submit, batch_ms = time_batch(refined)
         for _ in range(max(1, math.ceil(args.warmup / batch_ms))):
             submit()
         api.synchronize()
-        batch_ms = _event_elapsed(api, start, end, submit)
+        launches, submit, batch_ms = time_batch(launches)
         rounds = max(args.rounds, math.ceil(args.rep / batch_ms))
-        batches = [_event_elapsed(api, start, end, submit) for _ in range(rounds)]
+        batches = []
+        while len(batches) < rounds:
+            elapsed = _event_elapsed(api, start, end, submit, allow_zero=True)
+            if elapsed > 0 and elapsed >= minimum_batch_ms:
+                batches.append(elapsed)
+                continue
+            # If timer quantization produces an intermittent zero, enlarge the
+            # batch and restart so every sample has the same denominator.
+            if launches == _MAX_BATCH_LAUNCHES:
+                error = (_zero_event_error(launches) if elapsed == 0 else
+                         _coarse_event_error(launches, elapsed, minimum_batch_ms))
+                if use_graph:
+                    raise GraphUnavailable(f"{gems.vendor_name} graph timing: {error}")
+                raise error
+            launches, submit, batch_ms = time_batch(
+                _next_launch_count(launches), zero_seen=elapsed == 0)
+            rounds = max(args.rounds, math.ceil(args.rep / batch_ms))
+            batches.clear()
     return [elapsed / launches for elapsed in batches], {
         "launches_per_batch": launches, "batch_samples_ms": batches,
         "sample_count": len(batches), "measured_total_ms": sum(batches),
-        "graph_api": graph_name,
+        "graph_api": graph_name, "calibration_launches": calibration_launches,
+        "minimum_resolved_batch_ms": minimum_batch_ms,
     }
 
 

@@ -111,12 +111,12 @@ MiB/GiB use powers of 1024; GB/s/TB/s use powers of 1000. In copy mode, `--sizes
 
 Timing is implemented in `common.py`. All timestamps come from **the FlagGems device module's `Event` interface**; Python wall-clock timing is never used as a fallback.
 
-The default `--timing auto` selects a method based on runtime capabilities. When a usable graph API is available, it uses the device module's exported `CUDAGraph`, `NPUGraph`, `MUSAGraph`, `MLUGraph`, or `Graph`. If graphs are absent or capture is explicitly unsupported, device events bracket a batch of ordinary launches. The selected method and fallback reason are displayed and saved in JSON. An explicit `--timing graph` request requires graph support and fails otherwise. Missing device-event timing support also produces an explicit error.
+The default `--timing auto` selects a method based on runtime capabilities. When a usable graph API is available, it uses the device module's exported `CUDAGraph`, `NPUGraph`, `MUSAGraph`, `MLUGraph`, or `Graph`. If graphs are absent, capture is explicitly unsupported, or graph replay still produces an unresolved zero timestamp at the maximum batch size, device events bracket a batch of ordinary launches. The selected method and fallback reason are displayed and saved in JSON. An explicit `--timing graph` request requires working graph timing and fails otherwise. Missing device-event timing support also produces an explicit error.
 
 1. Execute the kernel once to complete JIT compilation, then synchronize the device. Data preparation and correctness checks finish before measurement.
-2. Build a batch of R kernel launches, capturing it as a device graph when available. Obtain an initial estimate, then calibrate R using the actual batch time. The default target is about 10 ms per batch, with at most 2048 launches.
+2. Start with five ordinary launches to estimate kernel time. If the backend event timer reports zero, increase the calibration batch geometrically until the timer resolves it, up to 2048 launches. After any zero, the measured batch must span at least 20 times the first nonzero reading; this guards against accepting one coarse timer tick as a peak result. Build a batch of R launches, capturing it as a device graph when available, and calibrate R using the actual batch time. The default target is about 10 ms per batch. If 2048 launches still cannot provide a sufficiently resolved timestamp, stop instead of reporting inflated throughput.
 3. Warm up the batch for approximately 100 ms by default.
-4. On the same device stream, record the start event, execute the batch, and record the end event. Wait for the end event to complete, then read the elapsed device time.
+4. On the same device stream, record the start event, execute the batch, and record the end event. Synchronize the FlagGems device API, then read the elapsed device time.
 5. Each sample's per-kernel time is `device batch time / R`. By default, at least 10 batches are sampled, with a total timing budget of approximately 200 ms.
 6. Calculate the minimum and median across batches. `min_ms` is the fastest **batch-average time**, not the duration of the shortest Python call. Report the highest throughput after sweeping all valid configurations.
 
@@ -130,7 +130,7 @@ end = torch_device_fn.Event(enable_timing=True)
 start.record()                   # Timestamp on the selected device
 submit_batch()                  # Graph replay or R ordinary launches
 end.record()                     # Same device stream
-end.synchronize()                # Use device synchronize if events lack this method
+torch_device_fn.synchronize()    # Make backend event timestamps visible
 one_kernel_ms = start.elapsed_time(end) / R
 ```
 
@@ -146,6 +146,14 @@ python bench_vector.py --warmup 200 --rep 500 --batch-ms 10 --rounds 20
 - JSON records the vendor, device type, FlagGems version, actual timing method, fallback reason, raw batch times, R, per-kernel times, quantiles, and validation results.
 - `--timing events` now uses FlagGems device events around ordinary batches and no longer calls the earlier `triton.testing.do_bench` implementation.
 
+FlagGems' KunlunXin KL3/P800 backend setup exports the following event switch. Use the same setting before Python imports the device runtime:
+
+```bash
+XPU_EVENT_KL3_ENABLE=1 python bench_tensor.py --dtype fp16
+```
+
+If a KunlunXin event still reports zero after the adaptive batch reaches 2048 launches, the benchmark stops with a diagnostic that asks you to verify the SDK, driver, and event implementation. It never substitutes a CPU clock or a fabricated epsilon duration.
+
 The "measured peak" is the best result from the current sweep. It does not guarantee that every possible implementation has been tested, and it is not equivalent to the vendor's theoretical peak. Tests use the device's existing clock and power policies. Run them sequentially on an idle GPU and compare the fastest batch with the median. For CUDA event behavior and the definition of effective bandwidth, see [NVIDIA CUDA Best Practices](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/#performance-metrics).
 
 ## Result Files
@@ -154,7 +162,7 @@ FlagGems regression records use `results/flaggems_*.json`. The four FP32/TF32 re
 
 ### Backend Portability Validation
 
-- 30 CPU-only runtime and precision tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, event timing without graphs, missing properties and FP64 capabilities, precision-setting restoration, timing normalization, and error handling. They also check FP32 CLI defaults, explicit precision forwarding in both launch paths, precision-probe fallback rejection, and instruction-audit classification and rejection rules. Any access to `torch.cuda` fails immediately in the runtime tests.
+- 38 CPU-only runtime and precision tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, coarse and missing event timing, graph resolution and zero-time fallback, missing properties and FP64 capabilities, modern and legacy precision-setting restoration, timing normalization, and error handling. They also check FP32 CLI defaults, explicit precision forwarding in both launch paths, precision-probe fallback rejection, and instruction-audit classification and rejection rules. Any direct access to `torch.cuda` fails immediately in the runtime tests.
 - H20 hardware tests cover both FlagGems graph and ordinary event paths, FP16/FP8/IEEE FP32/TF32 matrix operations, GEMM tail tiles, vector operations, copy/read modes, and the branch that forces CPU FP64 references.
 - These checks validate the runtime adaptation and NVIDIA regression paths; they do not establish hardware validation of kernels for every vendor.
 
