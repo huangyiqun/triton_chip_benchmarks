@@ -11,27 +11,43 @@ import statistics
 import torch
 import triton
 
-try:
-    import flag_gems
-except ModuleNotFoundError as exc:
-    if exc.name != "flag_gems":
-        raise
-    raise SystemExit("FlagGems is required. Install it in the environment for your chip backend.") from exc
+flag_gems = None
+
+
+def get_flag_gems():
+    """Load FlagGems only when hardware access is needed.
+
+    Keeping this lazy lets ``--help`` and source inspection work on login or
+    build nodes that cannot access an accelerator.
+    """
+    global flag_gems
+    if flag_gems is None:
+        try:
+            import flag_gems as loaded_flag_gems
+        except ModuleNotFoundError as exc:
+            if exc.name != "flag_gems":
+                raise
+            raise SystemExit(
+                "FlagGems is required to run a benchmark. Install it for your chip backend."
+            ) from exc
+        flag_gems = loaded_flag_gems
+    return flag_gems
 
 
 def get_device_api():
     """The active vendor module, supplied by FlagGems (not inferred from its name)."""
-    return flag_gems.runtime.torch_device_fn
+    return get_flag_gems().runtime.torch_device_fn
 
 
 def get_device(args):
     index = args if isinstance(args, int) else args.device
-    return torch.device(flag_gems.device, index)
+    return torch.device(get_flag_gems().device, index)
 
 
 def reference_device(device):
     """Use bounded CPU references on devices that cannot calculate in FP64."""
-    return device if getattr(flag_gems.runtime.device, "support_fp64", False) else torch.device("cpu")
+    gems = get_flag_gems()
+    return device if getattr(gems.runtime.device, "support_fp64", False) else torch.device("cpu")
 
 
 def _optional_query(obj, name, *args):
@@ -53,7 +69,7 @@ def available_memory_bytes():
 @contextmanager
 def full_precision_matmul():
     """Temporarily disable TF32 through FlagGems' backend settings, if exposed."""
-    backend = getattr(flag_gems.runtime, "torch_backend_device", None)
+    backend = getattr(get_flag_gems().runtime, "torch_backend_device", None)
     matmul = getattr(backend, "matmul", None)
     if matmul is None or not hasattr(matmul, "allow_tf32"):
         yield
@@ -127,8 +143,9 @@ def _compute_units(sources):
         if clusters and cores:
             return int(clusters) * int(cores), source + " (clusters * cores/cluster)"
     # FlagGems exports vendor-specific counts for backends without SM properties.
-    backend = getattr(flag_gems.runtime, "backend", None)
-    module = _optional_query(backend, "get_vendor_module", flag_gems.vendor_name)
+    gems = get_flag_gems()
+    backend = getattr(gems.runtime, "backend", None)
+    module = _optional_query(backend, "get_vendor_module", gems.vendor_name)
     for name in ("TOTAL_CORE_NUM", "CORE_NUM"):
         value = getattr(module, name, None)
         if value is not None and int(value) > 0:
@@ -137,10 +154,11 @@ def _compute_units(sources):
 
 
 def setup_device(args):
+    gems = get_flag_gems()
     api = get_device_api()
-    detector = flag_gems.runtime.device
+    detector = gems.runtime.device
     if _optional_query(api, "is_available") is False:
-        raise SystemExit(f"FlagGems backend {flag_gems.vendor_name!r} has no available device")
+        raise SystemExit(f"FlagGems backend {gems.vendor_name!r} has no available device")
     count = _optional_query(api, "device_count")
     if count is None:
         count = getattr(detector, "device_count", 0)
@@ -150,7 +168,7 @@ def setup_device(args):
     if callable(setter):
         setter(args.device)
     elif _optional_query(api, "current_device") != args.device:
-        raise SystemExit(f"{flag_gems.vendor_name} cannot select device {args.device}")
+        raise SystemExit(f"{gems.vendor_name} cannot select device {args.device}")
     torch.manual_seed(0)
     sources = [("FlagGems device API", _optional_query(api, "get_device_properties", args.device))]
     target = None
@@ -169,14 +187,14 @@ def setup_device(args):
         l2 = int(args.l2_mib * 2**20)
     total = _first_property(sources, "total_memory", "total_memory_bytes")
     name = (_first_property(sources, "name", "device_name")
-            or _optional_query(api, "get_device_name", args.device) or flag_gems.vendor_name)
+        or _optional_query(api, "get_device_name", args.device) or gems.vendor_name)
     bf16 = getattr(detector, "support_bf16", None)
     detected_bf16 = _optional_query(api, "is_bf16_supported")
     if detected_bf16 is not None:
         bf16 = bool(detected_bf16) and bf16 is not False
     metadata = {
-        "device_index": args.device, "device_type": flag_gems.device,
-        "device_name": str(name), "vendor_name": flag_gems.vendor_name,
+        "device_index": args.device, "device_type": gems.device,
+        "device_name": str(name), "vendor_name": gems.vendor_name,
         "backend": str(getattr(target, "backend", "unknown")),
         "architecture": str(getattr(target, "arch", "unknown")),
         "sm_count": units, "compute_units_source": unit_source,
@@ -184,11 +202,11 @@ def setup_device(args):
         "supports_fp64": bool(getattr(detector, "support_fp64", False)),
         "supports_bf16": bf16,
         "torch_version": torch.__version__, "triton_version": triton.__version__,
-        "flaggems_version": getattr(flag_gems, "__version__", "unknown"),
+        "flaggems_version": getattr(gems, "__version__", "unknown"),
         "device_api": getattr(api, "__name__", type(api).__name__),
     }
     memory = f"{total / 2**30:.1f} GiB" if total else "unknown"
-    print(f"Device {get_device(args)}: {name} | vendor={flag_gems.vendor_name} | "
+    print(f"Device {get_device(args)}: {name} | vendor={gems.vendor_name} | "
           f"Triton={metadata['backend']}/{metadata['architecture']} | "
           f"compute units={units or 'unknown'} | memory={memory}")
     print(f"FlagGems {metadata['flaggems_version']}, PyTorch {torch.__version__}, "
@@ -247,10 +265,11 @@ def _event_elapsed(api, start, end, submit):
 
 
 def _batch_samples(fn, args, use_graph):
+    gems = get_flag_gems()
     api = get_device_api()
-    graph_factory, graph_name = _graph_factory(api, flag_gems.device) if use_graph else (None, None)
+    graph_factory, graph_name = _graph_factory(api, gems.device) if use_graph else (None, None)
     if use_graph and graph_factory is None:
-        raise GraphUnavailable(f"{flag_gems.vendor_name}/{flag_gems.device} exposes no usable Graph API")
+        raise GraphUnavailable(f"{gems.vendor_name}/{gems.device} exposes no usable Graph API")
     with _stream_context(api):
         start, end = api.Event(enable_timing=True), api.Event(enable_timing=True)
 
@@ -272,11 +291,11 @@ def _batch_samples(fn, args, use_graph):
                 with api.graph(captured):
                     direct(count)
             except NotImplementedError as exc:
-                raise GraphUnavailable(f"{flag_gems.vendor_name} graph capture: {exc}") from exc
+                raise GraphUnavailable(f"{gems.vendor_name} graph capture: {exc}") from exc
             except RuntimeError as exc:
                 message = str(exc).lower()
                 if any(word in message for word in ("not supported", "unsupported", "not implemented")):
-                    raise GraphUnavailable(f"{flag_gems.vendor_name} graph capture: {exc}") from exc
+                    raise GraphUnavailable(f"{gems.vendor_name} graph capture: {exc}") from exc
                 raise
             return captured.replay  # Bound method keeps the captured graph alive.
 
@@ -312,9 +331,10 @@ def _event_samples(fn, args):
 
 def measure(fn, args):
     """GPU/NPU event timing through FlagGems only; never a CPU wall-clock fallback."""
+    gems = get_flag_gems()
     api = get_device_api()
     if not all(callable(getattr(api, name, None)) for name in ("Event", "synchronize")):
-        raise RuntimeError(f"{flag_gems.vendor_name} does not expose timed device events through FlagGems")
+        raise RuntimeError(f"{gems.vendor_name} does not expose timed device events through FlagGems")
     fn()  # Compile before any graph capture or timed samples.
     api.synchronize()
     requested = args.timing
@@ -334,7 +354,7 @@ def measure(fn, args):
         samples, details = _event_samples(fn, args)
     if not samples or any(not math.isfinite(value) or value <= 0 for value in samples):
         raise RuntimeError("Invalid device timing; increase the workload/--rep")
-    notice = f"Timing: {selected} via FlagGems {flag_gems.vendor_name} device events"
+    notice = f"Timing: {selected} via FlagGems {gems.vendor_name} device events"
     if fallback:
         notice += f" (auto fallback: {fallback}; includes host dispatch gaps)"
     if getattr(args, "_timing_notice", None) != notice:
