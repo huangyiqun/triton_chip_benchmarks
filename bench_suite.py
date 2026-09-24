@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Run the complete chip metric table, retaining unsupported and failed entries."""
 
+import os
+
+# Child benchmarks inherit this setting; set it before any device runtime starts.
+os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+
 import argparse
 from datetime import datetime, timezone
 import json

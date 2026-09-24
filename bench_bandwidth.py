@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Search for peak achieved global-memory copy and read bandwidth with Triton."""
 
+import os
+
+# Enable the KunlunXin KL3 event backend before accelerator packages are loaded.
+os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+
 import argparse
 import math
 

@@ -30,23 +30,41 @@ Device type and vendor are handled separately: multiple vendors may use the `cud
 
 The kernels still require the target Triton backend to support the selected operation and dtype. FP8 Tensor uses E4M3FN and is not automatically replaced with another FP8 format. TF32 requires an explicit precision mode and is not silently replaced with IEEE FP32, BF16, or FP16. [FlagGems backend interface documentation](https://github.com/flagos-ai/FlagGems/blob/master/src/flag_gems/runtime/backend/README.md)
 
-### Complete table
+### Complete 15-metric suite by chip
 
-Run the production sweep on an idle device:
+Run from the repository root on an idle device. Each command below makes one `bench_suite.py` invocation that attempts all 15 metrics in the table above. Set `--device` to the target device index; for example, use `--device 1` for the second H20. These are full sweeps, not quick-mode smoke tests.
 
-```bash
-cd /workspace/triton_chip_benchmarks
-python bench_suite.py --device 0 --output results/chip_metrics.json
-```
-
-For KunlunXin KL3/P800, enable its event implementation before Python starts:
+NVIDIA Hopper H20:
 
 ```bash
-XPU_EVENT_KL3_ENABLE=1 python bench_suite.py --device 0 \
-  --timing events --output results/chip_metrics.json
+python bench_suite.py --device 0 --timing auto \
+  --output results/h20_metrics.json
 ```
 
-The suite runs every metric in a separate child process, continues after unsupported formats or failures, and checkpoints the combined JSON after every row. Per-metric JSON and logs are stored in `results/chip_metrics_runs/` by default. The console prints the same fixed 15-row table.
+NVIDIA Hopper H100:
+
+```bash
+python bench_suite.py --device 0 --timing auto \
+  --output results/h100_metrics.json
+```
+
+KunlunXin KL3/P800:
+
+```bash
+python bench_suite.py --device 0 --timing events \
+  --output results/p800_metrics.json
+```
+
+Other FlagGems-supported backends (replace the output name with your chip model):
+
+```bash
+python bench_suite.py --device 0 --timing auto \
+  --output results/other_chip_metrics.json
+```
+
+The scripts default `XPU_EVENT_KL3_ENABLE` to `1` before importing the device runtime, so KunlunXin commands need no shell environment prefix. An explicitly set value is respected. A complete 15-row report does not guarantee 15 numeric peaks: an individual metric may be unsupported, not implemented, unverified, or fail at runtime.
+
+The suite runs every metric in a separate child process, continues after unsupported formats or failures, and checkpoints the combined JSON after every row. Per-metric JSON and logs are stored in a directory named after the output stem, such as `results/p800_metrics_runs/`. The console prints the same fixed 15-row table.
 
 Result status has a strict meaning:
 
@@ -145,7 +163,7 @@ Floating-point modes count one multiplication plus one addition as 2 FLOPs. NVID
 FlagTree's KunlunXin XPU backend reports clusters as `multiprocessor_count`, uses 64 cores per cluster, and does not use Triton's `num_warps` tuning parameter. The benchmark therefore starts with 1/2 programs per cluster and blocks of 1024/2048 FP32-sized elements, which provide 16/32 elements per core for its 512-bit vectorization path. Typed INT8 uses blocks of 4096/8192 so each core receives 64/128 elements, matching one or two 512-bit INT8 vectors. Floating kernels emit source multiply plus add operations so the XPU vectorizer can process and fuse them. The result remains unverified unless the final textual ISA contains an explicitly matching instruction type; intermediate typed-vector IR is recorded as supporting evidence, but is not treated as final ISA proof. XPU currently supplies placeholder zero register/spill counts, so the JSON records those fields as unknown.
 
 ```bash
-XPU_EVENT_KL3_ENABLE=1 python bench_vector.py --timing events \
+python bench_vector.py --timing events \
   --output results/kunlunxin_vector.json
 ```
 
@@ -213,10 +231,10 @@ python bench_vector.py --warmup 200 --rep 500 --batch-ms 10 --rounds 20
 - JSON records the vendor, device type, FlagGems version, actual timing method, fallback reason, raw batch times, R, per-kernel times, quantiles, and validation results.
 - `--timing events` now uses FlagGems device events around ordinary batches and no longer calls the earlier `triton.testing.do_bench` implementation.
 
-FlagGems' KunlunXin KL3/P800 backend setup exports the following event switch. Use the same setting before Python imports the device runtime:
+For KunlunXin KL3/P800, the benchmark scripts set the FlagGems event switch before importing the device runtime. Run the program directly:
 
 ```bash
-XPU_EVENT_KL3_ENABLE=1 python bench_tensor.py --dtype fp16
+python bench_tensor.py --dtype fp16 --timing events
 ```
 
 If a KunlunXin event still reports zero after the adaptive batch reaches 2048 launches, the benchmark stops with a diagnostic that asks you to verify the SDK, driver, and event implementation. It never substitutes a CPU clock or a fabricated epsilon duration.

@@ -10,6 +10,12 @@ counts as two operations: FLOPs for floats and integer operations for INT8.
 
 from __future__ import annotations
 
+import os
+
+# FlagGems' KunlunXin event backend reads this during runtime initialization.
+# Keep an explicit user setting (for example, 0 while diagnosing event support).
+os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+
 import argparse
 import math
 import re
