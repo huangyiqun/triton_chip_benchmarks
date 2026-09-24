@@ -8,7 +8,7 @@ import torch
 import triton
 import triton.language as tl
 
-from common import (add_common_arguments, available_memory_bytes, emit_results,
+from common import (add_common_arguments, available_memory_bytes, emit_results, emit_unsupported,
                     get_device, measure, positive_int, reference_device, setup_device)
 
 
@@ -20,8 +20,9 @@ def copy_kernel(SRC, DST, N: tl.constexpr, BLOCK_SIZE: tl.constexpr):
 
 
 def launch_copy(src, dst, block_size, num_warps):
+    launch_options = {} if num_warps is None else {"num_warps": num_warps}
     return copy_kernel[(triton.cdiv(src.numel(), block_size),)](
-        src, dst, src.numel(), BLOCK_SIZE=block_size, num_warps=num_warps,
+        src, dst, src.numel(), BLOCK_SIZE=block_size, **launch_options,
     )
 
 
@@ -38,10 +39,24 @@ def read_kernel(SRC, SINK, N: tl.constexpr, BLOCK_SIZE: tl.constexpr,
 
 
 def launch_read(src, sink, block_size, num_warps, vendor_name):
+    launch_options = {} if num_warps is None else {"num_warps": num_warps}
     return read_kernel[(triton.cdiv(src.numel(), block_size),)](
         src, sink, src.numel(), BLOCK_SIZE=block_size,
-        CACHE_MODIFIER=".cg" if vendor_name == "nvidia" else "", num_warps=num_warps,
+        CACHE_MODIFIER=".cg" if vendor_name == "nvidia" else "", **launch_options,
     )
+
+
+def configure_launches(args, metadata):
+    """XPU programs have no warps; run each block size once on that backend."""
+    is_xpu = metadata.get("backend") == "xpu" or (
+        metadata.get("backend") == "unknown" and metadata.get("vendor_name") == "kunlunxin")
+    if is_xpu:
+        if args.num_warps is not None and not args.quick:
+            print("FlagTree XPU does not use Triton num_warps; ignoring --num-warps")
+        args.num_warps = [None]
+    elif args.num_warps is None:
+        args.num_warps = [4] if args.quick else [4, 8]
+    return [(block, warps) for block in args.block_sizes for warps in args.num_warps]
 
 
 def check_read(src, sink, block_size):
@@ -85,15 +100,16 @@ def parse_args():
                         help="Size of EACH source/destination buffer in MiB")
     parser.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp32")
     parser.add_argument("--block-sizes", type=positive_int, nargs="+", default=[1024, 4096, 16384])
-    parser.add_argument("--num-warps", type=positive_int, nargs="+", default=[4, 8])
+    parser.add_argument("--num-warps", type=positive_int, nargs="+",
+                        help="Warps per program (default: 4 8; unused on FlagTree XPU)")
     parser.add_argument("--quick", action="store_true",
                         help="Smoke check: 8 MiB, one configuration per mode; not an HBM result")
     args = parser.parse_args()
     if args.quick:
-        args.sizes_mib, args.block_sizes, args.num_warps = [8], [1024], [4]
+        args.sizes_mib, args.block_sizes, args.num_warps = [8], [1024], None
     if any(block & (block - 1) or block > 65536 for block in args.block_sizes):
         parser.error("--block-sizes must be powers of two no greater than 65536")
-    if any(warps not in (4, 8) for warps in args.num_warps):
+    if args.num_warps is not None and any(warps not in (4, 8) for warps in args.num_warps):
         parser.error("--num-warps must be 4 or 8")
     return args
 
@@ -104,11 +120,13 @@ def main():
     device = get_device(args)
     dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[args.dtype]
     if args.dtype == "bf16" and metadata.get("supports_bf16") is False:
-        raise SystemExit("The selected accelerator does not support BF16; choose --dtype fp16 or fp32")
+        emit_unsupported("bandwidth", metadata, args,
+                         "The selected accelerator does not support BF16; choose --dtype fp16 or fp32")
+        return
     element_size = torch.empty((), dtype=dtype).element_size()
     l2_bytes = metadata["l2_cache_bytes"]
     modes = ["copy", "read"] if args.mode == "all" else [args.mode]
-    configurations = [(block, warps) for block in args.block_sizes for warps in args.num_warps]
+    configurations = configure_launches(args, metadata)
 
     # Exercise a masked tail independently of the aligned throughput workloads.
     for block, warps in configurations:
@@ -186,7 +204,8 @@ def main():
                     "peak_gbps": peak_gbps, "peak_tbps": peak_gbps / 1000,
                     **correctness,
                 })
-                print(f"{mode:4s} {size_mib:11d} {block:7d} {warps:6d} "
+                warps_label = str(warps) if warps is not None else "n/a"
+                print(f"{mode:4s} {size_mib:11d} {block:7d} {warps_label:>6} "
                       f"{timings['min_ms']:11.6f} {timings['median_ms']:11.6f} "
                       f"{peak_gbps:11.2f} {gbps:12.2f}", flush=True)
                 del sink

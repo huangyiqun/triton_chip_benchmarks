@@ -149,7 +149,8 @@ def _first_property(sources, *names):
 
 def _compute_units(sources):
     for source, props in sources:
-        value = _property(props, "multi_processor_count", "multiProcessorCount", "sm_count",
+        value = _property(props, "multi_processor_count", "multiprocessor_count",
+                          "multiProcessorCount", "sm_count",
                           "compute_unit_count", "num_vectorcore", "cube_core_num",
                           "num_aicore", "core_count", "core_num", "num_cores")
         if value is not None and int(value) > 0:
@@ -201,7 +202,12 @@ def setup_device(args):
     l2 = _first_property(sources, "L2_cache_size", "l2_cache_size", "l2_cache_bytes") or 0
     if getattr(args, "l2_mib", None) is not None:
         l2 = int(args.l2_mib * 2**20)
-    total = _first_property(sources, "total_memory", "total_memory_bytes")
+    total = _first_property(sources, "total_memory", "total_memory_bytes",
+                            "totalGlobalMem")
+    if not total:
+        memory_info = _optional_query(api, "mem_get_info")
+        if memory_info is not None and len(memory_info) >= 2:
+            total = memory_info[1]
     name = (_first_property(sources, "name", "device_name")
         or _optional_query(api, "get_device_name", args.device) or gems.vendor_name)
     bf16 = getattr(detector, "support_bf16", None)
@@ -214,7 +220,9 @@ def setup_device(args):
         "backend": str(getattr(target, "backend", "unknown")),
         "architecture": str(getattr(target, "arch", "unknown")),
         "sm_count": units, "compute_units_source": unit_source,
-        "total_memory_bytes": int(total) if total else None, "l2_cache_bytes": int(l2),
+        "total_memory_bytes": int(total) if total else None,
+        "memory_capacity_gib": float(total) / 2**30 if total else None,
+        "l2_cache_bytes": int(l2),
         "supports_fp64": bool(getattr(detector, "support_fp64", False)),
         "supports_bf16": bf16,
         "torch_version": torch.__version__, "triton_version": triton.__version__,
@@ -473,17 +481,47 @@ def measure(fn, args):
     }
 
 
+def _serialized_arguments(args):
+    return {key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items() if not key.startswith("_")}
+
+
+def _write_document(args, document):
+    if args.output is None:
+        return
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(
+        document, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
+    print(f"JSON: {args.output.resolve()}")
+
+
+def emit_unsupported(name, metadata, args, reason, *, details=None):
+    """Emit a machine-readable unsupported result without inventing a value."""
+    document = {
+        "benchmark": name,
+        "status": "unsupported",
+        "reason": str(reason),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "device": metadata,
+        "arguments": _serialized_arguments(args),
+        "results": [],
+    }
+    if details is not None:
+        document["details"] = details
+    print(f"UNSUPPORTED: {reason}")
+    _write_document(args, document)
+    return document
+
+
 def emit_results(name, metadata, args, rows):
     if not rows:
         raise RuntimeError("No valid measurements were produced")
-    if args.output is None:
-        return
     methods = sorted({row["timing_method"] for row in rows if "timing_method" in row})
     document = {
-        "benchmark": name, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "benchmark": name, "status": "ok",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "device": metadata,
-        "arguments": {key: str(value) if isinstance(value, Path) else value
-                      for key, value in vars(args).items() if not key.startswith("_")},
+        "arguments": _serialized_arguments(args),
         "timing": {
             "provider": "flag_gems.runtime.torch_device_fn.Event",
             "requested": args.timing, "methods_used": methods,
@@ -496,6 +534,5 @@ def emit_results(name, metadata, args, rows):
         },
         "results": rows,
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(document, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
-    print(f"JSON: {args.output.resolve()}")
+    _write_document(args, document)
+    return document

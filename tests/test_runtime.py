@@ -10,9 +10,11 @@ from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 import importlib.util
 import io
+import json
 import math
 from pathlib import Path
 import sys
+import tempfile
 from types import ModuleType, SimpleNamespace
 import unittest
 from unittest import mock
@@ -248,6 +250,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(metadata["sm_count"], 40)
         self.assertEqual(metadata["l2_cache_bytes"], int(12.5 * 2**20))
 
+    def test_unsupported_result_is_machine_readable_without_measurements(self):
+        self.configure()
+        metadata = self.set_up_device()
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "unsupported.json"
+            args = self.arguments(output=output)
+            with redirect_stdout(io.StringIO()):
+                document = common.emit_unsupported(
+                    "tensor", metadata, args, "chip does not support fp8")
+            self.assertEqual(document["status"], "unsupported")
+            self.assertEqual(document["results"], [])
+            saved = json.loads(output.read_text())
+            self.assertEqual(saved["reason"], "chip does not support fp8")
+
     def test_dictionary_device_properties_are_supported(self):
         properties = {"name": "Dictionary NPU", "multi_processor_count": 32,
                       "total_memory": 16 * 2**30, "L2_cache_size": 8 * 2**20}
@@ -255,11 +271,19 @@ class RuntimeTests(unittest.TestCase):
         metadata = self.set_up_device()
         self.assertEqual(metadata["sm_count"], 32)
         self.assertEqual(metadata["l2_cache_bytes"], 8 * 2**20)
+        self.assertEqual(metadata["memory_capacity_gib"], 16.0)
         self.assertEqual(common.available_memory_bytes(), 12 * 2**30)
+
+    def test_total_memory_falls_back_to_flaggems_mem_info(self):
+        self.configure(FakeAccelerator(memory=(12 * 2**30, 16 * 2**30)))
+        metadata = self.set_up_device()
+        self.assertEqual(metadata["total_memory_bytes"], 16 * 2**30)
+        self.assertEqual(metadata["memory_capacity_gib"], 16.0)
 
     def test_vendor_driver_core_counts_do_not_require_sm_properties(self):
         cases = (("npu", "ascend", {"num_vectorcore": 40}, 40),
-                 ("mlu", "cambricon", {"cluster_num": 8, "core_num_per_cluster": 4}, 32))
+                 ("mlu", "cambricon", {"cluster_num": 8, "core_num_per_cluster": 4}, 32),
+                 ("cuda", "kunlunxin", {"multiprocessor_count": 12}, 12))
         for device_type, vendor, properties, expected in cases:
             with self.subTest(device_type=device_type):
                 self.configure(FakeAccelerator(device_type), vendor=vendor,

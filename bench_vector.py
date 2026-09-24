@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure sustained FP32 vector FMA throughput with eight independent chains."""
+"""Measure typed vector arithmetic throughput; report unsupported types explicitly."""
 
 import argparse
 import math
@@ -8,18 +8,51 @@ import re
 import torch
 import triton
 import triton.language as tl
+from triton.compiler.errors import CompilationError
 
 from common import (add_common_arguments, available_memory_bytes, emit_results,
-                    get_device, measure, positive_int, reference_device, setup_device)
+                    emit_unsupported, get_device, measure, positive_int,
+                    reference_device, setup_device)
 
 
 CHAINS = 8
+DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
+          "int8": torch.int8, "fp64": torch.float64,
+          "fp8": getattr(torch, "float8_e4m3fn", None)}
+
+
+class UnsupportedVectorDtype(RuntimeError):
+    """The requested arithmetic cannot be provided by this benchmark/backend."""
+
+
+@triton.jit
+def _float_update(x, a, b, USE_EXPLICIT_FMA: tl.constexpr):
+    if USE_EXPLICIT_FMA:
+        return tl.fma(x, a, b)
+    return x * a + b
+
+
+@triton.jit
+def _dp4a_update(x, a, b):
+    return tl.inline_asm_elementwise(
+        "dp4a.s32.s32 $0, $1, $2, $3;", constraints="=r,r,r,r",
+        args=[x, a, b], dtype=tl.int32, is_pure=True, pack=1)
+
+
+@triton.jit
+def _int8_mul_add_update(x, a, b):
+    # XPU has a distinct typed INT8 path, without packed INT32 emulation.
+    # Overflow is intentional modulo 256. The XPU default sanitizer would
+    # otherwise widen the computation and insert overflow assertions.
+    product = tl.mul(x, a, sanitize_overflow=False).to(tl.int8)
+    return tl.add(product, b, sanitize_overflow=False).to(tl.int8)
 
 
 @triton.jit
 def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                       ITERATIONS: tl.constexpr, BLOCK_SIZE: tl.constexpr,
-                      UNROLL: tl.constexpr):
+                      UNROLL: tl.constexpr, USE_EXPLICIT_FMA: tl.constexpr,
+                      IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False):
     offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     # Runtime input loads keep all lanes and chains independent. Repeating a
     # formula every warp/program could let the compiler merge equal chains.
@@ -43,17 +76,36 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
 
     # Explicitly unroll a small group of iterations to amortize loop control.
     # The CLI requires exact divisibility, so each lane still executes exactly
-    # ITERATIONS * 8 FP32 FMAs. Independent chains hide dependent-FMA latency.
+    # ITERATIONS * 8 updates. Independent chains hide dependency latency.
     for _ in tl.range(0, ITERATIONS // UNROLL, loop_unroll_factor=1):
         for _ in tl.static_range(UNROLL):
-            x0 = tl.fma(x0, a, b0)
-            x1 = tl.fma(x1, a, b1)
-            x2 = tl.fma(x2, a, b2)
-            x3 = tl.fma(x3, a, b3)
-            x4 = tl.fma(x4, a, b4)
-            x5 = tl.fma(x5, a, b5)
-            x6 = tl.fma(x6, a, b6)
-            x7 = tl.fma(x7, a, b7)
+            if IS_INT8 and USE_DP4A:
+                x0 = _dp4a_update(x0, a, b0)
+                x1 = _dp4a_update(x1, a, b1)
+                x2 = _dp4a_update(x2, a, b2)
+                x3 = _dp4a_update(x3, a, b3)
+                x4 = _dp4a_update(x4, a, b4)
+                x5 = _dp4a_update(x5, a, b5)
+                x6 = _dp4a_update(x6, a, b6)
+                x7 = _dp4a_update(x7, a, b7)
+            elif IS_INT8:
+                x0 = _int8_mul_add_update(x0, a, b0)
+                x1 = _int8_mul_add_update(x1, a, b1)
+                x2 = _int8_mul_add_update(x2, a, b2)
+                x3 = _int8_mul_add_update(x3, a, b3)
+                x4 = _int8_mul_add_update(x4, a, b4)
+                x5 = _int8_mul_add_update(x5, a, b5)
+                x6 = _int8_mul_add_update(x6, a, b6)
+                x7 = _int8_mul_add_update(x7, a, b7)
+            else:
+                x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                x1 = _float_update(x1, a, b1, USE_EXPLICIT_FMA)
+                x2 = _float_update(x2, a, b2, USE_EXPLICIT_FMA)
+                x3 = _float_update(x3, a, b3, USE_EXPLICIT_FMA)
+                x4 = _float_update(x4, a, b4, USE_EXPLICIT_FMA)
+                x5 = _float_update(x5, a, b5, USE_EXPLICIT_FMA)
+                x6 = _float_update(x6, a, b6, USE_EXPLICIT_FMA)
+                x7 = _float_update(x7, a, b7, USE_EXPLICIT_FMA)
 
     # Every accumulator is observable, preventing dead-chain elimination.
     tl.store(Output + offsets + 0 * ELEMENTS, x0)
@@ -66,30 +118,42 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
     tl.store(Output + offsets + 7 * ELEMENTS, x7)
 
 
-def check_output(inputs, output, coefficients, iterations):
+def check_output(inputs, output, coefficients, iterations, use_explicit_fma=True):
     """Check every output against a double-precision closed-form recurrence.
 
-    With 0 < a < 1, the recurrence stays between its initial value and b/(1-a).
-    Each FP32 FMA incurs at most u * max_magnitude absolute rounding error,
-    where u = 2**-24. Summing a geometric series bounds the accumulated error.
-    A factor of two allows for the rounding of intermediate recurrence values.
+    FP16/BF16 use an exactly representable two-cycle, with zero tolerance.
+    FP32/FP64 use 0 < a < 1, bounded by the initial value and b/(1-a). Summing
+    per-operation rounding errors as a geometric series bounds accumulated
+    error using the selected dtype's unit roundoff. Separate source Mul/Add
+    receives twice the FMA bound to allow two rounding steps.
     """
     elements = output.shape[1]
     # Copy first: several accelerators do not support FP64 device arithmetic.
     coeff = coefficients.cpu().double()
     validation_device = reference_device(output.device)
     a = coeff[0].item()
-    decay = math.exp(iterations * math.log(a))
-    geometric_sum = -math.expm1(iterations * math.log(a)) / (1.0 - a)
+    exact_cycle = a == -1.0
+    decay = None if exact_cycle else math.exp(iterations * math.log(a))
+    geometric_sum = (None if exact_cycle else
+                     -math.expm1(iterations * math.log(a)) / (1.0 - a))
     b = coeff[1:, None].to(validation_device)
     max_error, max_tolerance = 0.0, 0.0
     # Bound temporary FP64 allocations even for unusually large user grids.
     for start in range(0, elements, 131072):
         initial = inputs[:, start:start + 131072].to(validation_device).double()
         actual = output[:, start:start + 131072].to(validation_device).double()
-        reference = decay * initial + b * geometric_sum
-        max_magnitude = torch.maximum(initial.abs(), (b / (1.0 - a)).abs())
-        tolerance = 2.0 * (2.0**-24) * max_magnitude * geometric_sum + 1e-7
+        if exact_cycle:
+            # Low-precision inputs and coefficients are multiples of 1/8 in
+            # [-1, 1]. Both -x+b and its inverse are exactly representable.
+            reference = b - initial if iterations % 2 else initial
+            tolerance = torch.zeros_like(reference)
+        else:
+            reference = decay * initial + b * geometric_sum
+            max_magnitude = torch.maximum(initial.abs(), (b / (1.0 - a)).abs())
+            rounding_factor = 2.0 if use_explicit_fma else 4.0
+            unit_roundoff = 2.0**(-53 if inputs.dtype == torch.float64 else -24)
+            tolerance = (rounding_factor * unit_roundoff * max_magnitude
+                         * geometric_sum + 16 * unit_roundoff)
         error = (actual - reference).abs()
         # Comparisons reject NaNs and infinities as well as inaccurate values.
         if not torch.all(error <= tolerance).item():
@@ -103,111 +167,470 @@ def check_output(inputs, output, coefficients, iterations):
         "max_abs_error": max_error,
         "max_abs_tolerance": max_tolerance,
         "reference_device": str(validation_device),
+        "validation_recurrence": "exact involution" if exact_cycle else "contractive affine",
     }
 
 
-def inspect_assembly(compiled, vendor_name):
-    """Check NVIDIA PTX; retain optional metadata on other FlagGems devices."""
-    result = {"registers_per_thread": getattr(compiled, "n_regs", None),
-              "register_spills": getattr(compiled, "n_spills", None),
-              "assembly_check": "unavailable for this vendor"}
-    # Some non-NVIDIA runtimes also expose a backend named "cuda".
-    if vendor_name == "nvidia":
-        ptx = compiled.asm["ptx"]
-        fma_count = len(re.findall(r"\bfma\.(?:rn\.)?(?:ftz\.)?f32\b", ptx))
-        tensor_ops = bool(re.search(r"\b(?:mma|wgmma|tcgen05)\.", ptx))
-        if fma_count == 0 or tensor_ops:
-            raise RuntimeError("Generated PTX failed vector instruction check: "
-                               f"FP32 FMA instructions={fma_count}, tensor ops={tensor_ops}")
-        result.update({
-            "ptx_fp32_fma_instruction_sites": fma_count,
-            "ptx_contains_tensor_instructions": tensor_ops,
-            "assembly_check": "passed (FP32 FMA; no tensor instructions)",
-        })
+def _signed_bytes(word):
+    return [((int(word) >> shift) & 255) -
+            (256 if ((int(word) >> shift) & 255) >= 128 else 0)
+            for shift in (0, 8, 16, 24)]
+
+
+def _dot4_reference(words, weights):
+    result = torch.zeros_like(words, dtype=torch.int64)
+    for shift, weight in zip((0, 8, 16, 24), weights):
+        lane = (words >> shift) & 255
+        lane = torch.where(lane >= 128, lane - 256, lane)
+        result += lane * weight
     return result
 
 
-def main():
+def check_int8_output(inputs, output, coefficients, iterations):
+    """Exact full validation using a bounded transition table and binary lifting.
+
+    After one update the state is bounded by 128*sum(abs(weights))+abs(bias).
+    Composing this small state table avoids a CPU loop over every output for
+    every benchmark iteration. All arithmetic here is signed INT64 on CPU.
+    """
+    coeff = coefficients.cpu().long()
+    weights = _signed_bytes(coeff[0].item())
+    bias = coeff[1:, None]
+    bound = 128 * sum(abs(value) for value in weights) + int(bias.abs().max())
+    states = torch.arange(-bound, bound + 1).expand(CHAINS, -1)
+    power = _dot4_reference(states, weights) + bias + bound
+    composed = torch.arange(2 * bound + 1).expand(CHAINS, -1)
+    remaining = iterations - 1
+    while remaining:
+        if remaining & 1:
+            composed = power.gather(1, composed)
+        remaining >>= 1
+        if remaining:
+            power = power.gather(1, power)
+    for start in range(0, inputs.shape[1], 131072):
+        initial = inputs[:, start:start + 131072].cpu().long()
+        first = _dot4_reference(initial, weights) + bias
+        reference = composed.gather(1, first + bound) - bound
+        actual = output[:, start:start + 131072].cpu().long()
+        if not torch.equal(actual, reference):
+            raise RuntimeError("Vector INT8 correctness failed: output differs from exact "
+                               "signed INT8 dot4 / INT32 state reference")
+    return {"correctness": "all elements passed exact INT64 reference",
+            "max_abs_error": 0, "max_abs_tolerance": 0, "reference_device": "cpu",
+            "validation_recurrence": "signed INT8 dot4 with INT32 bias/state"}
+
+
+def check_int8_mul_add_output(inputs, output, coefficients, iterations):
+    """Check every INT8 result exactly against the affine map modulo 256."""
+    if any(value.dtype != torch.int8 for value in (inputs, output, coefficients)):
+        raise RuntimeError("INT8 multiply-add validation requires INT8 input, output and coefficients")
+    coeff = coefficients.cpu().long()
+    # Compose affine maps by exponentiation: (a*x+b)^iterations modulo 256.
+    # All intermediates remain small signed INT64 values, even for long runs.
+    multiplier, bias = 1, torch.zeros((CHAINS, 1), dtype=torch.int64)
+    step_multiplier, step_bias = int(coeff[0]) % 256, coeff[1:, None] % 256
+    remaining = iterations
+    while remaining:
+        if remaining & 1:
+            bias = (step_multiplier * bias + step_bias) % 256
+            multiplier = (step_multiplier * multiplier) % 256
+        step_bias = (step_multiplier * step_bias + step_bias) % 256
+        step_multiplier = (step_multiplier * step_multiplier) % 256
+        remaining >>= 1
+    for start in range(0, inputs.shape[1], 131072):
+        initial = inputs[:, start:start + 131072].cpu().long()
+        reference = (multiplier * initial + bias + 128) % 256 - 128
+        actual = output[:, start:start + 131072].cpu().long()
+        if not torch.equal(actual, reference):
+            raise RuntimeError("Vector INT8 correctness failed: output differs from exact "
+                               "modular INT8 multiply-add reference")
+    return {"correctness": "all elements passed exact modulo-256 INT64 reference",
+            "max_abs_error": 0, "max_abs_tolerance": 0, "reference_device": "cpu",
+            "validation_recurrence": "INT8 multiply-add with modulo-256 state"}
+
+
+def _inspect_xpu_artifacts(compiled, dtype):
+    artifacts = getattr(compiled, "asm", {})
+    assembly = artifacts.get("asm", "")
+    assembly = assembly if isinstance(assembly, str) else ""
+    # Evidence must be executable final assembly, not quoted IR asm templates,
+    # comments, or a filename. Unknown mnemonic suffixes remain unverified.
+    assembly = re.sub(r"/\*.*?\*/", "", assembly, flags=re.DOTALL)
+    assembly = re.sub(r"(?m)(?://|#).*?$", "", assembly)
+    opcodes = re.findall(
+        r"(?m)^\s*(?:[0-9a-fA-F]+:\s+)?(v(?:mac|mul|add)(?:\.[a-zA-Z0-9_]+)+)\b",
+        assembly)
+    float32 = [op for op in opcodes if op.split(".")[1] == "f"]
+    if dtype in ("bf16", "fp16") and float32:
+        raise UnsupportedVectorDtype(
+            f"XPU final assembly uses FP32 vector arithmetic for {dtype.upper()} inputs; "
+            f"this promoted path is not reported as a native {dtype.upper()} peak")
+    result = {"xpu_assembly_available": bool(assembly.strip()),
+              "xpu_arithmetic_instruction_types": sorted(set(opcodes)),
+              "native_arithmetic_verified": False, "hardware_fusion_verified": False}
+    if dtype == "int8":
+        evidence = {}
+        for kind in ("ttir", "ttxir", "llir"):
+            text = artifacts.get(kind, "")
+            text = text if isinstance(text, str) else ""
+            if kind == "llir":
+                evidence[kind] = all(re.search(r"\b" + op + r"\s+<\s*\d+\s+x\s+i8\s*>", text)
+                                     for op in ("mul", "add"))
+            else:
+                evidence[kind] = all(any(op in line and "vector<" in line
+                                          and re.search(r"\bi8\b|xi8\b", line)
+                                          for line in text.splitlines())
+                                     for op in ("vvmuli", "vvaddi"))
+        result["xpu_ir_vector_i8_evidence"] = evidence
+        typed_ops = [op for op in opcodes if set(op.split(".")[1:]) & {"i8", "s8", "u8"}
+                     and not set(op.split(".")[1:]) & {"wide", "sat", "saturate"}]
+        result["native_arithmetic_verified"] = all(
+            any(op.startswith(prefix + ".") for op in typed_ops) for prefix in ("vmul", "vadd"))
+        if result["native_arithmetic_verified"]:
+            result["assembly_check"] = "passed (final XPU ISA contains explicitly typed 8-bit vector multiply and add)"
+        else:
+            result["assembly_check"] = ("unverified: final XPU ISA does not prove 8-bit vector multiply/add; "
+                                        "IR evidence is recorded separately; resource metadata is placeholder data")
+    elif dtype in ("fp16", "fp32"):
+        suffix = "hf" if dtype == "fp16" else "f"
+        mac = [op for op in opcodes if op.startswith("vmac." + suffix + ".") or op == "vmac." + suffix]
+        if mac:
+            result.update(native_arithmetic_verified=True, hardware_fusion_verified=True,
+                          assembly_check=f"passed (final XPU ISA contains vmac.{suffix})")
+    return result
+
+
+def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
+    """Check NVIDIA PTX; retain optional metadata on other FlagGems devices."""
+    result = {"registers_per_thread": getattr(compiled, "n_regs", None),
+              "register_spills": getattr(compiled, "n_spills", None),
+              "assembly_check": "unavailable for this vendor",
+              "native_arithmetic_verified": False}
+    if vendor_name == "kunlunxin" or backend == "xpu":
+        # FlagTree's XPU loader currently returns literal zero placeholders for
+        # both values, so they cannot prove register residency or no spilling.
+        result.update({
+            "registers_per_thread": None,
+            "register_spills": None,
+            "assembly_check": "unavailable; XPU register metadata is placeholder data",
+        })
+        result.update(_inspect_xpu_artifacts(compiled, dtype))
+    # Some non-NVIDIA runtimes also expose a backend named "cuda".
+    elif vendor_name == "nvidia":
+        ptx = compiled.asm["ptx"]
+        tensor_ops = bool(re.search(r"\b(?:mma|wgmma|tcgen05)\.", ptx))
+        if tensor_ops:
+            raise RuntimeError("Generated PTX contains tensor instructions in a vector benchmark")
+        if dtype == "int8":
+            instruction_count = len(re.findall(r"\bdp4a\.s32\.s32\b", ptx))
+            instruction = "signed INT8 DP4A with INT32 output"
+        else:
+            suffix = {"fp16": "f16(?:x2)?", "bf16": "bf16(?:x2)?",
+                      "fp32": "f32", "fp64": "f64", "fp8": "e4m3(?:x[24])?"}[dtype]
+            instruction_count = len(re.findall(r"\bfma\.(?:\w+\.)*" + suffix + r"\b", ptx))
+            instruction = f"{dtype.upper()} FMA"
+            if dtype in ("fp16", "bf16", "fp8") and re.search(r"\bfma\.(?:\w+\.)*f(?:32|64)\b", ptx):
+                raise UnsupportedVectorDtype(
+                    f"Compiler promotes {dtype.upper()} vector arithmetic to FP32/FP64; "
+                    "promoted arithmetic is not reported as the requested native peak")
+        if instruction_count == 0:
+            raise UnsupportedVectorDtype(f"Generated PTX does not contain native {instruction}")
+        result.update({
+            "ptx_arithmetic_instruction_sites": instruction_count,
+            "ptx_contains_tensor_instructions": tensor_ops,
+            "native_arithmetic_verified": True,
+            "assembly_check": f"passed ({instruction}; no tensor instructions)",
+        })
+        if dtype == "fp32":
+            result["ptx_fp32_fma_instruction_sites"] = instruction_count
+    return result
+
+
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     add_common_arguments(parser)
+    parser.add_argument("--dtype", choices=tuple(DTYPES), default="fp32",
+                        help="Arithmetic type (default: fp32); unsupported types emit a status JSON")
     parser.add_argument("--iterations", type=positive_int, default=4096,
-                        help="FMA iterations per accumulator (default: 4096)")
-    parser.add_argument("--blocks-per-sm", type=positive_int, nargs="+", default=[8, 16],
-                        help="Grid size multipliers for SM/CU count (default: 8 16)")
-    parser.add_argument("--block-sizes", type=positive_int, nargs="+", default=[256, 512],
-                        help="Elements per program, powers of two (default: 256 512)")
-    parser.add_argument("--num-warps", type=int, choices=[4, 8], nargs="+", default=[4, 8],
-                        help="Warps per program to sweep (default: 4 8)")
+                        help="Multiply-add iterations per accumulator (default: 4096)")
+    parser.add_argument("--blocks-per-sm", type=positive_int, nargs="+",
+                        help="Grid multipliers per compute unit (XPU default: 1 2; "
+                             "other backends: 8 16)")
+    parser.add_argument("--block-sizes", type=positive_int, nargs="+",
+                        help="Elements per program, powers of two (XPU INT8: 4096 8192; "
+                             "other XPU: 1024 2048; other backends: 256 512)")
+    parser.add_argument("--num-warps", type=int, choices=[4, 8], nargs="+",
+                        help="Warps per program (default: 4 8; ignored by FlagTree XPU)")
     parser.add_argument("--unroll", type=int, choices=[1, 2, 4, 8, 16], nargs="+",
-                        default=[1, 4, 8],
-                        help="Explicit FMA loop unroll factors (default: 1 4 8)")
+                        help="Explicit loop unroll factors (XPU default: 1 4; "
+                             "other backends: 1 4 8)")
     parser.add_argument("--quick", action="store_true",
-                        help="One smoke configuration: 32 iterations, block=128, warps=4, unroll=1")
-    args = parser.parse_args()
+                        help="One backend-aware smoke configuration; not a peak result")
+    return parser
+
+
+def _is_flagtree_xpu(metadata):
+    backend = metadata.get("backend")
+    return backend == "xpu" or (backend == "unknown"
+                                and metadata.get("vendor_name") == "kunlunxin")
+
+
+def configure_sweep(args, metadata):
+    """Fill only unspecified tuning dimensions with backend-appropriate values."""
+    is_xpu = _is_flagtree_xpu(metadata)
+    # A 512-bit INT8 vector has 64 lanes; the XPU layout distributes a tile
+    # across 64 cores. At least 4096 elements provide one full vector per core.
+    xpu_int8 = is_xpu and args.dtype == "int8"
     if args.quick:
-        args.iterations, args.blocks_per_sm, args.block_sizes = 32, [1], [128]
-        args.num_warps, args.unroll = [4], [1]
-    if any(size & (size - 1) for size in args.block_sizes):
-        parser.error("--block-sizes must contain only powers of two")
-    if args.iterations >= 2**31:
-        parser.error("--iterations must be less than 2**31")
-    if any(args.iterations % unroll for unroll in args.unroll):
-        parser.error("--iterations must be divisible by every --unroll factor")
-    metadata = setup_device(args)
+        args.iterations = 32
+        args.blocks_per_sm = [1]
+        args.block_sizes = [4096 if xpu_int8 else 1024] if is_xpu else [128]
+        args.num_warps = [None] if is_xpu else [4]
+        args.unroll = [1]
+    else:
+        args.blocks_per_sm = args.blocks_per_sm or ([1, 2] if is_xpu else [8, 16])
+        xpu_blocks = [4096, 8192] if xpu_int8 else [1024, 2048]
+        args.block_sizes = args.block_sizes or (xpu_blocks if is_xpu else [256, 512])
+        if is_xpu:
+            if args.num_warps is not None:
+                print("FlagTree XPU does not use Triton num_warps; ignoring --num-warps")
+            args.num_warps = [None]
+        else:
+            args.num_warps = args.num_warps or [4, 8]
+        args.unroll = args.unroll or ([1, 4] if is_xpu else [1, 4, 8])
+    return is_xpu
+
+
+def launch_vector(kernel, grid, inputs, output, coefficients, elements, iterations,
+                  block_size, unroll, use_explicit_fma, num_warps,
+                  is_int8=False, use_dp4a=False):
+    launch_options = {} if num_warps is None else {"num_warps": num_warps}
+    if is_int8:
+        launch_options.update(IS_INT8=True, USE_DP4A=use_dp4a)
+    return kernel[grid](
+        inputs, output, coefficients, elements, iterations, block_size, unroll,
+        use_explicit_fma, **launch_options,
+    )
+
+
+def unsupported_dtype_reason(dtype, metadata):
+    if DTYPES[dtype] is None:
+        return f"This PyTorch build does not expose {dtype.upper()} storage"
+    if dtype == "fp64" and metadata.get("supports_fp64") is False:
+        return "FlagGems reports that this device does not support FP64 arithmetic"
+    if dtype == "bf16" and metadata.get("supports_bf16") is False:
+        return "FlagGems reports that this device does not support BF16 arithmetic"
+    if dtype == "int8" and metadata.get("vendor_name") != "nvidia" and not _is_flagtree_xpu(metadata):
+        return ("This benchmark has no implemented and verified native INT8 vector instruction "
+                "path for this backend; unpacking INT8 values and computing in INT32 does not "
+                "measure native INT8 throughput. This is a benchmark-path limitation, "
+                "not a claim that the chip lacks INT8 instructions")
+    if dtype == "fp8":
+        # FP8 tensor-core/storage support does not establish native elementwise
+        # FP8 arithmetic. Do not risk a backend abort or publish widened math as
+        # an FP8 vector peak without an implemented native instruction path.
+        return ("This benchmark has no implemented and verified native FP8 vector arithmetic "
+                "path; FP8 storage, conversions, or tensor instructions do not measure native "
+                "FP8 vector throughput. This is a benchmark-path limitation, not a claim that "
+                "the chip lacks FP8 instructions")
+    return None
+
+
+def _make_inputs(dtype, elements, device, *, int8_mul_add=False):
+    if dtype == "int8" and int8_mul_add:
+        inputs = torch.randint(-128, 128, (CHAINS, elements), dtype=torch.int8)
+        coefficients = torch.tensor([3] + [2 * chain + 1 for chain in range(CHAINS)],
+                                    dtype=torch.int8)
+    elif dtype == "int8":
+        inputs = torch.randint(-(2**31), 2**31, (CHAINS, elements), dtype=torch.int32)
+        packed = sum((value & 255) << shift
+                     for value, shift in zip((3, -2, 1, -1), (0, 8, 16, 24)))
+        if packed >= 2**31:
+            packed -= 2**32
+        coefficients = torch.tensor([packed] + list(range(1, CHAINS + 1)), dtype=torch.int32)
+    elif dtype in ("fp16", "bf16"):
+        # Exact arithmetic in every supported floating format. Coefficients are
+        # loaded from memory, so the compiler cannot fold the two-cycle away.
+        inputs = (torch.randint(1, 8, (CHAINS, elements)).float() / 8).to(DTYPES[dtype])
+        coefficients = torch.tensor([-1.0] + [(i + 1) / 8 for i in range(CHAINS)],
+                                    dtype=DTYPES[dtype])
+    else:
+        inputs = torch.empty((CHAINS, elements), dtype=DTYPES[dtype]).uniform_(0.125, 1.0)
+        coefficients = torch.tensor([1.0 - 2.0**-14] +
+                                    [(chain + 1) * 2.0**-16 for chain in range(CHAINS)],
+                                    dtype=DTYPES[dtype])
+    return inputs.to(device), coefficients.to(device)
+
+
+def _compile_failure_is_unsupported(exc):
+    """Recognize explicit arithmetic capability diagnostics, not compiler bugs.
+
+    CompilationError also covers bad launch parameters, frontend bugs, and
+    invalid user code. Its source excerpt is deliberately excluded: a quoted
+    source string must not change an unrelated error into an unsupported type.
+    """
+    message = str((exc.error_message or "") if isinstance(exc, CompilationError) else exc).lower()
+    dtype = r"(?:fp16|float16|f16|bf16|bfloat16|fp32|float32|f32|fp64|float64|f64|int8|s8|fp8|float8|e4m3|e5m2)"
+    patterns = (
+        r"unsupported\s+(?:data\s+|scalar\s+)?(?:dtype|type)\s*[:=]?\s*['\"]?" + dtype + r"\b",
+        r"\b" + dtype + r"\s+(?:(?:arithmetic|dtype|type)\s+)?(?:is\s+)?(?:unsupported|not supported)\b",
+        r"(?:does not support|doesn't support)\s+(?:the\s+)?(?:(?:dtype|type)\s+)?['\"]?" + dtype + r"\b",
+        r"\b(?:dp4a|fma(?:\.[a-z0-9]+)*|bf16|f16|f64)\b[^\n]*requires\s+['\"]?(?:\.target\s+)?sm_\d+",
+    )
+    return any(re.search(pattern, message) for pattern in patterns)
+
+
+def _storage_failure_is_unsupported(exc):
+    # Missing dtype allocation/copy support is distinct from memory exhaustion
+    # and runtime/device faults, which must remain errors.
+    return isinstance(exc, NotImplementedError) or any(
+        term in str(exc).lower() for term in (
+            "not implemented for", "unsupported dtype", "unsupported data type",
+            "unsupported scalar type", "does not support float64", "does not support bfloat16",
+        ))
+
+
+def throughput_fields(dtype, elements, iterations, timing, *, int8_mul_add=False):
+    per_update = 8 if dtype == "int8" and not int8_mul_add else 2
+    operations = per_update * CHAINS * elements * iterations
+    median = operations / (timing["median_ms"] * 1e9)
+    peak = operations / (timing["min_ms"] * 1e9)
+    if dtype == "int8":
+        return {"counted_integer_ops": operations, "tops": median, "peak_tops": peak,
+                "throughput_unit": "TOPS", "ops_per_accumulator_update": per_update}
+    return {"counted_flops": operations, "tflops": median, "peak_tflops": peak,
+            "throughput_unit": "TFLOP/s", "ops_per_accumulator_update": 2}
+
+
+def run_benchmark(args, metadata, is_xpu):
+    reason = unsupported_dtype_reason(args.dtype, metadata)
+    if reason:
+        raise UnsupportedVectorDtype(reason)
     if not metadata.get("sm_count"):
         raise SystemExit("The runtime did not expose the compute-unit count; "
                          "supply the chip's count with --compute-units")
     device = get_device(args)
-    # Exact binary coefficients: fixed points b/(1-a) range from 0.25 to 2.0,
-    # so even very long runs cannot overflow or collapse to a trivial zero.
-    coefficients = torch.tensor([1.0 - 2.0**-14] +
-                                [(chain + 1) * 2.0**-16 for chain in range(CHAINS)],
-                                device=device, dtype=torch.float32)
-    print(f"FP32 vector: {CHAINS} independent register FMA chains, "
-          f"{args.iterations} iterations; 1 FMA = 2 FLOPs")
+    is_int8 = args.dtype == "int8"
+    use_dp4a = is_int8 and not is_xpu and metadata["vendor_name"] == "nvidia"
+    int8_mul_add = is_int8 and is_xpu
+    use_explicit_fma = not is_xpu and not is_int8
+    source_operation = ("INT8_MUL_ADD_MOD256" if int8_mul_add else "DP4A") if is_int8 else (
+        "FMA" if use_explicit_fma else "MUL_ADD")
+    median_key, peak_key = ("tops", "peak_tops") if is_int8 else ("tflops", "peak_tflops")
+    unit = "TOPS" if is_int8 else "TFLOP/s"
+    print(f"{args.dtype.upper()} vector: {CHAINS} independent {source_operation} chains, "
+          f"{args.iterations} iterations; {8 if use_dp4a else 2} operations per update")
+    if int8_mul_add:
+        print("XPU uses INT8 input, coefficients, state and output with modulo-256 multiply/add; "
+              "native instruction verification requires explicit final ISA evidence")
+    elif is_int8:
+        print("INT8 lanes are packed in INT32 words; each dot4 uses four signed products "
+              "and an INT32 bias, with its result supplying the next packed input")
+    elif is_xpu:
+        print("XPU source uses multiply plus add for FlagTree vectorization; "
+              "hardware fusion and native SIMD instructions are unverified")
     if args.quick:
         print("QUICK smoke mode: throughput is not a representative performance result")
-    print("blocks/SM  block  warps  unroll  registers  median_ms  median_TF/s  peak_TF/s")
+    print(f"blocks/unit  block  warps  unroll  registers  median_ms  median_{unit}  peak_{unit}")
     rows = []
+    excluded = []
+
+    def exclude(kind, reason, blocks_per_sm, block_size, num_warps, unroll):
+        config = {"blocks_per_sm": blocks_per_sm, "block_size": block_size,
+                  "num_warps": num_warps, "unroll": unroll}
+        excluded.append({"status": kind, "reason": str(reason), **config})
+        print(f"Excluding vector configuration ({kind}): {config}: {reason}")
     for blocks_per_sm in args.blocks_per_sm:
         blocks = metadata["sm_count"] * blocks_per_sm
         for block_size in args.block_sizes:
             elements = blocks * block_size
-            required_bytes = 2 * CHAINS * elements * 4
+            itemsize = 4 if use_dp4a else torch.empty((), dtype=DTYPES[args.dtype]).element_size()
+            required_bytes = 2 * CHAINS * elements * itemsize
             free_bytes = available_memory_bytes()
             if free_bytes is not None and required_bytes > free_bytes * 0.5:
                 raise SystemExit(f"Vector input/output need {required_bytes / 2**30:.2f} GiB; "
                                  "reduce --blocks-per-sm or --block-sizes")
-            inputs = torch.empty((CHAINS, elements), device=device, dtype=torch.float32)
-            inputs.uniform_(0.125, 1.0)
-            output = torch.empty_like(inputs)
+            try:
+                inputs, coefficients = _make_inputs(args.dtype, elements, device, int8_mul_add=int8_mul_add)
+                output = torch.empty_like(inputs)
+            except Exception as exc:
+                if _storage_failure_is_unsupported(exc):
+                    raise UnsupportedVectorDtype(
+                        f"Backend storage/copy support for {args.dtype.upper()} is unavailable: {exc}") from exc
+                raise
             for num_warps in args.num_warps:
                 for unroll in args.unroll:
-                    output.fill_(float("nan"))
+                    output.fill_(-128 if int8_mul_add else -(2**31) if is_int8 else float("nan"))
 
-                    def run():
-                        return vector_fma_kernel[(blocks,)](
-                            inputs, output, coefficients, elements, args.iterations, block_size,
-                            unroll, num_warps=num_warps,
+                    def run(iterations=args.iterations, unroll_value=unroll):
+                        return launch_vector(
+                            vector_fma_kernel, (blocks,), inputs, output, coefficients,
+                            elements, iterations, block_size, unroll_value,
+                            use_explicit_fma, num_warps, is_int8, use_dp4a,
                         )
 
-                    compiled = run()
-                    assembly = inspect_assembly(compiled, metadata["vendor_name"])
-                    if assembly["register_spills"]:
-                        print(f"Skipping spilled kernel: blocks/SM={blocks_per_sm}, "
-                              f"block={block_size}, warps={num_warps}, unroll={unroll}, "
-                              f"spills={assembly['register_spills']}")
+                    try:
+                        compiled = run()
+                        assembly = inspect_assembly(compiled, metadata["vendor_name"], args.dtype,
+                                                    metadata.get("backend"))
+                    except triton.OutOfResources as exc:
+                        exclude("resource_limit", exc, blocks_per_sm, block_size, num_warps, unroll)
                         continue
-                    correctness = check_output(inputs, output, coefficients, args.iterations)
+                    except Exception as exc:
+                        if isinstance(exc, UnsupportedVectorDtype) or _compile_failure_is_unsupported(exc):
+                            exclude("unsupported", exc, blocks_per_sm, block_size, num_warps, unroll)
+                            continue
+                        if isinstance(exc, CompilationError):
+                            exclude("compilation_error", exc, blocks_per_sm, block_size, num_warps, unroll)
+                            continue
+                        raise
+                    if assembly["register_spills"]:
+                        exclude("register_spills", f"spills={assembly['register_spills']}",
+                                blocks_per_sm, block_size, num_warps, unroll)
+                        continue
+                    if int8_mul_add:
+                        correctness = check_int8_mul_add_output(inputs, output, coefficients, args.iterations)
+                        # INT8 has no NaN sentinel. Revalidate the same run with
+                        # a different poison to detect every unwritten lane.
+                        output.fill_(127)
+                        run()
+                        check_int8_mul_add_output(inputs, output, coefficients, args.iterations)
+                        # Modular recurrences can cycle back to their inputs;
+                        # an adjacent iteration count catches an identity copy.
+                        output.fill_(-128)
+                        run(args.iterations + 1, 1)
+                        check_int8_mul_add_output(inputs, output, coefficients, args.iterations + 1)
+                        correctness["write_coverage_probe"] = "both INT8 poison values passed"
+                        correctness["adjacent_iteration_probe"] = "all elements passed"
+                    elif is_int8:
+                        correctness = check_int8_output(inputs, output, coefficients, args.iterations)
+                    else:
+                        correctness = check_output(inputs, output, coefficients, args.iterations,
+                                                   use_explicit_fma)
+                        if args.dtype in ("bf16", "fp16") and args.iterations % 2 == 0:
+                            output.fill_(float("nan"))
+                            run(args.iterations + 1, 1)
+                            check_output(inputs, output, coefficients, args.iterations + 1,
+                                         use_explicit_fma)
+                            correctness["odd_iteration_probe"] = "all elements passed"
                     timing = measure(run, args)
                     # Count only repeated arithmetic. Initialization, loop control,
                     # input/coefficient loads and final stores remain in elapsed time.
-                    flops = 2 * CHAINS * elements * args.iterations
-                    tflops = flops / (timing["median_ms"] * 1e9)
-                    peak_tflops = flops / (timing["min_ms"] * 1e9)
+                    rates = throughput_fields(args.dtype, elements, args.iterations, timing,
+                                              int8_mul_add=int8_mul_add)
+                    arithmetic_dtype = ("int8" if assembly["native_arithmetic_verified"] else "unverified") if int8_mul_add else (
+                        "int8 products with int32 sum" if is_int8 else args.dtype)
                     row = {
-                        "dtype": "float32",
-                        "operation": "FMA",
+                        "status": "ok", "requested_dtype": args.dtype,
+                        "dtype": str(DTYPES[args.dtype]).removeprefix("torch."),
+                        "input_storage_dtype": "int8 packed in int32" if use_dp4a else args.dtype,
+                        "accumulator_dtype": "int32" if use_dp4a else args.dtype,
+                        "source_arithmetic_dtype": args.dtype,
+                        "arithmetic_dtype": arithmetic_dtype,
+                        "includes_unpacking": False,
+                        "operation": source_operation,
+                        "hardware_fusion_verified": bool(use_explicit_fma
+                                                         and assembly["native_arithmetic_verified"]),
                         "accumulator_chains": CHAINS,
                         "iterations": args.iterations,
                         "blocks_per_sm": blocks_per_sm,
@@ -216,28 +639,62 @@ def main():
                         "num_warps": num_warps,
                         "unroll": unroll,
                         "elements_per_chain": elements,
-                        "counted_flops": flops,
-                        "tflops": tflops,
-                        "peak_tflops": peak_tflops,
                         "smoke_only": args.quick,
-                        **timing, **correctness, **assembly,
+                        **rates, **timing, **correctness, **assembly,
                     }
                     rows.append(row)
                     registers = assembly["registers_per_thread"]
                     registers_label = str(registers) if registers is not None else "n/a"
-                    print(f"{blocks_per_sm:9d}  {block_size:5d}  {num_warps:5d}  {unroll:6d}  "
+                    warps_label = str(num_warps) if num_warps is not None else "n/a"
+                    print(f"{blocks_per_sm:11d}  {block_size:5d}  {warps_label:>5}  {unroll:6d}  "
                           f"{registers_label:>9}  {timing['median_ms']:9.5f}  "
-                          f"{tflops:11.3f}  {peak_tflops:9.3f}")
-            del inputs, output
+                          f"{rates[median_key]:11.3f}  {rates[peak_key]:9.3f}")
+            del inputs, output, coefficients
     if not rows:
-        raise SystemExit("No vector configuration passed the register-spill check; "
-                         "reduce --block-sizes or --unroll")
-    best = max(rows, key=lambda row: row["peak_tflops"])
-    print(f"Peak measured FP32 vector throughput: {best['peak_tflops']:.3f} TFLOP/s "
-          f"(median {best['tflops']:.3f} TFLOP/s; "
-          f"blocks/SM={best['blocks_per_sm']}, block={best['block_size']}, "
-          f"warps={best['num_warps']}, unroll={best['unroll']})")
-    emit_results("vector_fp32_fma", metadata, args, rows)
+        reasons = "; ".join(dict.fromkeys(item["reason"] for item in excluded))
+        if excluded and all(item["status"] == "unsupported" for item in excluded):
+            raise UnsupportedVectorDtype(
+                f"No tested vector configuration provides the requested {args.dtype.upper()} "
+                f"arithmetic path: {reasons}")
+        raise RuntimeError("No vector configuration produced a valid measurement; "
+                           f"compiler/configuration/resource failures: {reasons}")
+    best = max(rows, key=lambda row: row[peak_key])
+    tuning = (f"blocks/unit={best['blocks_per_sm']}, block={best['block_size']}, "
+              f"unroll={best['unroll']}")
+    if best["num_warps"] is not None:
+        tuning += f", warps={best['num_warps']}"
+    print(f"Peak measured {args.dtype.upper()} vector workload throughput: {best[peak_key]:.3f} {unit} "
+          f"(median {best[median_key]:.3f} {unit}; {tuning})")
+    if int8_mul_add and not best["native_arithmetic_verified"]:
+        print("This numeric result measures the typed INT8 source workload; "
+              "it is not a verified native INT8 vector peak")
+    result_name = f"vector_{args.dtype}_" + ("dot4" if use_dp4a else
+                                            "fma" if use_explicit_fma else "mul_add")
+    result_metadata = {**metadata, "vector_excluded_configurations": excluded}
+    emit_results(result_name, result_metadata, args, rows)
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.block_sizes is not None and any(size & (size - 1) for size in args.block_sizes):
+        parser.error("--block-sizes must contain only powers of two")
+    if args.iterations >= 2**31:
+        parser.error("--iterations must be less than 2**31")
+    if args.unroll is not None and any(args.iterations % unroll for unroll in args.unroll):
+        parser.error("--iterations must be divisible by every --unroll factor")
+    metadata = setup_device(args)
+    is_xpu = configure_sweep(args, metadata)
+    if any(args.iterations % unroll for unroll in args.unroll):
+        parser.error("--iterations must be divisible by every --unroll factor")
+    reason = unsupported_dtype_reason(args.dtype, metadata)
+    if reason:
+        emit_unsupported(f"vector_{args.dtype}", metadata, args, reason)
+        return
+    try:
+        run_benchmark(args, metadata, is_xpu)
+    except UnsupportedVectorDtype as exc:
+        emit_unsupported(f"vector_{args.dtype}", metadata, args, str(exc))
 
 
 if __name__ == "__main__":
