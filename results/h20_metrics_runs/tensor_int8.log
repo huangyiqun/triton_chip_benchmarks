@@ -1,0 +1,21 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident int8 operands, two independent INT32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
+Timing: graph via FlagGems nvidia device events
+   64/64/64          1      4     0.3255    0.3255       257.28     257.33    91
+   64/64/64          2      4     0.6475    0.6471       258.71     258.84    91
+   64/64/64          4      4     1.2926    1.2920       259.17     259.29    91
+   64/64/64          8      4     2.5773    2.5760       259.97     260.10    91
+  64/128/64          1      4     0.6472    0.6471       258.80     258.86   154
+  64/128/64          2      4     1.2923    1.2919       259.23     259.31   154
+  64/128/64          4      4     3.4303    3.2169       195.32     208.28   154
+  64/128/64          8      4     5.7880    5.7865       231.52     231.58   154
+  128/64/64          1      4     0.6494    0.6491       257.94     258.05   156
+  128/64/64          2      4     1.2923    1.2916       259.24     259.38   156
+  128/64/64          4      4     3.8580    3.6444       173.67     183.85   156
+  128/64/64          8      4     5.7955    5.7938       231.22     231.29   156
+Measured tensor peak: 260.10 TOPS (same configuration median 259.97 TOPS; best observed timing sample, dense int8)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/tensor_int8.json

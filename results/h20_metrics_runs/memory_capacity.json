@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "NVIDIA H20",
+    "vendor_name": "nvidia",
+    "backend": "cuda",
+    "architecture": "90",
+    "sm_count": 78,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 102077169664,
+    "memory_capacity_gib": 95.0667724609375,
+    "l2_cache_bytes": 62914560,
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.11.0+cu130",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.4.0rc1.post1+gfc5eb165a.d20260914",
+    "device_api": "torch.cuda"
+  },
+  "results": []
+}

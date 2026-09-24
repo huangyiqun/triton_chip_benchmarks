@@ -1,0 +1,32 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+INT8 vector: 8 independent DP4A chains, 4096 iterations; 8 operations per update
+INT8 lanes are packed in INT32 words; each dot4 uses four signed products and an INT32 bias, with its result supplying the next packed input
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+Timing: graph via FlagGems nvidia device events
+          8    256      4       1         32    0.57630       72.664     72.670
+          8    256      4       4         32    0.57628       72.666     72.672
+          8    256      4       8         32    0.57749       72.514     72.520
+          8    256      8       1         30    0.57510       72.816     72.822
+          8    256      8       4         28    0.57488       72.842     72.850
+          8    256      8       8         28    0.57489       72.842     72.845
+          8    512      4       1         48    1.15186       72.710     72.756
+          8    512      4       4         48    1.15414       72.567     72.576
+          8    512      4       8         48    1.15108       72.759     72.763
+          8    512      8       1         32    1.14851       72.922     72.929
+          8    512      8       4         32    1.14847       72.925     72.931
+          8    512      8       8         32    1.14877       72.906     72.911
+         16    256      4       1         32    1.14967       72.849     72.853
+         16    256      4       4         32    1.14972       72.845     72.852
+         16    256      4       8         32    1.15089       72.772     72.777
+         16    256      8       1         32    1.14861       72.916     72.923
+         16    256      8       4         28    1.14843       72.927     72.935
+         16    256      8       8         28    1.14844       72.927     72.930
+         16    512      4       1         48    2.29892       72.862     72.869
+         16    512      4       4         48    2.30112       72.792     72.797
+         16    512      4       8         48    2.29807       72.889     72.896
+         16    512      8       1         32    2.29572       72.964     72.972
+         16    512      8       4         32    2.29562       72.967     72.972
+         16    512      8       8         32    2.29592       72.957     72.968
+Peak measured INT8 vector workload throughput: 72.972 TOPS (median 72.964 TOPS; blocks/unit=16, block=512, unroll=1, warps=8)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/vector_int8.json

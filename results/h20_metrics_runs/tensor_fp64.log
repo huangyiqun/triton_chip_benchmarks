@@ -1,0 +1,17 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp64 operands, two independent FP64 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems nvidia device events
+   32/32/16          1      4    18.3738   18.3704         0.28       0.28   114
+   32/32/16          2      4    36.7431   36.7369         0.28       0.28   114
+   32/32/16          4      4    73.4838   73.4663         0.28       0.29   114
+   32/32/16          8      4   146.9906  146.9254         0.28       0.29   114
+   32/64/16          1      4    18.3717   18.3698         0.57       0.57   146
+   32/64/16          2      4    36.7331   36.7260         0.57       0.57   146
+   32/64/16          4      4    73.4746   73.4642         0.57       0.57   146
+   32/64/16          8      4   146.9305  146.9021         0.57       0.57   146
+Measured native FP64 tensor peak: 0.57 TFLOP/s (same configuration median 0.57 TFLOP/s; best observed timing sample, dense fp64)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/tensor_fp64.json

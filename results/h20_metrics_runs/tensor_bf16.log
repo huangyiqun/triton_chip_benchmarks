@@ -1,0 +1,21 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems nvidia device events
+   64/64/32          1      4     0.3255    0.3254       128.64     128.67    90
+   64/64/32          2      4     0.6468    0.6466       129.50     129.53    90
+   64/64/32          4      4     1.2931    1.2921       129.54     129.63    90
+   64/64/32          8      4     2.5775    2.5757       129.98     130.06    90
+  64/128/32          1      4     0.6449    0.6447       129.88     129.91   154
+  64/128/32          2      4     1.2878    1.2876       130.07     130.09   154
+  64/128/32          4      4     3.8489    3.4231        87.04      97.87   154
+  64/128/32          8      4     5.7793    5.7785       115.93     115.95   154
+  128/64/32          1      4     0.6498    0.6496       128.88     128.93   156
+  128/64/32          2      4     1.2922    1.2916       129.63     129.68   156
+  128/64/32          4      4     3.8599    3.6467        86.79      91.87   156
+  128/64/32          8      4     5.7988    5.7968       115.54     115.58   156
+Measured tensor peak: 130.09 TFLOP/s (same configuration median 130.07 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/tensor_bf16.json

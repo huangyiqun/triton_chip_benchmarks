@@ -1,0 +1,25 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, IEEE dot precision, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems nvidia device events
+   32/32/32          1      4     0.5999    0.5999        17.45      17.45    48
+   32/32/32          2      4     1.0181    1.0180        20.57      20.57    48
+   32/32/32          4      4     1.8959    1.8957        22.09      22.09    48
+   32/32/32          8      4     3.7633    3.7629        22.25      22.26    48
+   32/64/32          1      4     1.0670    1.0668        19.62      19.63    72
+   32/64/32          2      4     1.8578    1.8567        22.54      22.55    72
+   32/64/32          4      4     3.6533    3.6499        22.92      22.95    72
+   32/64/32          8      4     7.2036    7.2014        23.25      23.26    72
+   64/32/32          1      4     1.1362    1.1361        18.43      18.43    72
+   64/32/32          2      4     1.9641    1.9636        21.32      21.33    72
+   64/32/32          4      4     3.7446    3.7442        22.37      22.37    72
+   64/32/32          8      4     7.3149    7.3141        22.90      22.90    72
+   64/64/32          1      4     2.2695    2.2686        18.45      18.46   128
+   64/64/32          2      4     3.1990    3.1986        26.18      26.18   128
+   64/64/32          4      4     6.4452    6.4436        25.99      26.00   128
+   64/64/32          8      4    12.5936   12.5920        26.60      26.60   128
+Measured IEEE FP32 matrix throughput: 26.60 TFLOP/s (same configuration median 26.60 TFLOP/s; best observed timing sample, dense ieee_fp32)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/tensor_fp32.json

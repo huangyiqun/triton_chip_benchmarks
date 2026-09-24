@@ -1,0 +1,31 @@
+Device cuda:0: NVIDIA H20 | vendor=nvidia | Triton=cuda/90 | compute units=78 | memory=95.1 GiB
+FlagGems 5.4.0rc1.post1+gfc5eb165a.d20260914, PyTorch 2.11.0+cu130, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+FP64 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems nvidia device events
+          8    256      4       1         56   18.37418        0.570      0.570
+          8    256      4       4         60   18.37696        0.570      0.570
+          8    256      4       8         62   18.37382        0.570      0.570
+          8    256      8       1         40   18.37094        0.570      0.570
+          8    256      8       4         40   18.37373        0.570      0.570
+          8    256      8       8         40   18.37366        0.570      0.570
+          8    512      4       1         92   36.73707        0.570      0.570
+          8    512      4       4         92   36.73672        0.570      0.570
+          8    512      4       8        104   36.73552        0.570      0.570
+          8    512      8       1         62   36.73733        0.570      0.570
+          8    512      8       4         62   36.73231        0.570      0.570
+          8    512      8       8         62   36.73547        0.570      0.570
+         16    256      4       1         56   36.73472        0.570      0.570
+         16    256      4       4         62   36.73059        0.570      0.570
+         16    256      4       8         62   36.73043        0.570      0.570
+         16    256      8       1         40   36.73301        0.570      0.570
+         16    256      8       4         40   36.74315        0.570      0.570
+         16    256      8       8         40   36.73693        0.570      0.570
+         16    512      4       1         94   73.46569        0.570      0.570
+         16    512      4       4         92   73.47664        0.570      0.570
+         16    512      4       8        104   73.45283        0.570      0.570
+         16    512      8       1         64   73.46024        0.570      0.570
+         16    512      8       4         64   73.47766        0.570      0.570
+         16    512      8       8         64   73.47799        0.570      0.570
+Peak measured FP64 vector workload throughput: 0.570 TFLOP/s (median 0.570 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=4)
+JSON: /workspace/triton_chip_benchmarks/results/h20_metrics_runs/vector_fp64.json
