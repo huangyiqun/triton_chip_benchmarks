@@ -134,6 +134,9 @@ class SuiteReportTests(unittest.TestCase):
         error = summarize(item, {"results": [{"status": "error", "reason": "unsupported compiler?"}]})
         self.assertEqual(error["status"], "error")
         self.assertIn("promotes to FP32", format_table([declared]))
+        missing_path = summarize(item, {"status": "not_implemented", "reason": "no native path"})
+        self.assertEqual(missing_path["status"], "not_implemented")
+        self.assertIsNone(missing_path["value"])
 
     def test_nonfinite_rates_cannot_win_selection(self):
         result = summarize(metric("vector_fp32"), {"results": [
@@ -186,6 +189,16 @@ class SuiteRunnerTests(unittest.TestCase):
                 result, _ = suite.run_metric(metric("vector_fp8"), args, root)
             self.assertEqual(result["status"], "unsupported")
             self.assertEqual(result["reason"], "no native FP8")
+
+            def missing_path(command, **kwargs):
+                output = Path(command[command.index("--output") + 1])
+                output.write_text(json.dumps({"status": "not_implemented", "reason": "no verified path"}))
+                return subprocess.CompletedProcess(command, 1)
+
+            with mock.patch.object(suite.subprocess, "run", side_effect=missing_path):
+                result, _ = suite.run_metric(metric("vector_fp8"), args, root)
+            self.assertEqual(result["status"], "not_implemented")
+            self.assertEqual(result["reason"], "no verified path")
 
     def test_successful_quick_child_is_labeled_smoke_and_bad_json_is_error(self):
         with tempfile.TemporaryDirectory() as temporary:

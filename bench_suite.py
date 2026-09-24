@@ -127,7 +127,7 @@ def run_metric(metric, args, directory):
                 result = empty_metric(metric, "error", f"Invalid benchmark JSON: {exc}")
         else:
             result = empty_metric(metric, "error", "Benchmark did not write result JSON")
-        if returncode and result["status"] != "unsupported":
+        if returncode and result["status"] not in ("unsupported", "not_implemented"):
             partial = result if result["status"] in ("ok", "unverified") else None
             result = empty_metric(metric, "error", f"Benchmark exited with code {returncode}; see log")
             if partial is not None:
@@ -151,7 +151,8 @@ def run_suite(args):
         "measurement_policy": "Highest observed valid throughput; median from the same configuration. "
                               "Capacity is reported device capacity. Bandwidth is effective copy read+write "
                               "traffic with HBM-sized buffers; read rates are auxiliary details. "
-                              "Unsupported metrics have no numeric value; errors do not imply unsupported hardware.",
+                              "Unsupported and not-implemented metrics have no numeric value; "
+                              "errors do not imply unsupported hardware.",
         "results": [empty_metric(metric) for metric in METRICS],
     }
     write_json(args.output, report)

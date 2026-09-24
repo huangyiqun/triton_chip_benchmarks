@@ -178,10 +178,10 @@ class VectorDtypeTests(unittest.TestCase):
         for message in ("out of memory", "illegal memory access", "device lost"):
             self.assertFalse(vector._storage_failure_is_unsupported(RuntimeError(message)))
 
-    def test_fp8_and_missing_fp64_write_structured_unsupported(self):
+    def test_fp8_path_gap_and_missing_fp64_are_distinguished(self):
         metadata = {"vendor_name": "kunlunxin", "backend": "xpu", "supports_fp64": False}
         with TemporaryDirectory() as directory:
-            for dtype in ("fp8", "fp64"):
+            for dtype, status in (("fp8", "not_implemented"), ("fp64", "unsupported")):
                 path = Path(directory) / f"{dtype}.json"
                 with mock.patch("sys.argv", ["bench_vector.py", "--dtype", dtype,
                                              "--output", str(path)]), \
@@ -191,35 +191,40 @@ class VectorDtypeTests(unittest.TestCase):
                     vector.main()
                 run.assert_not_called()
                 document = json.loads(path.read_text())
-                self.assertEqual(document["status"], "unsupported")
+                self.assertEqual(document["status"], status)
                 self.assertEqual(document["results"], [])
                 self.assertTrue(document["reason"])
-                self.assertIn("UNSUPPORTED:", printed.getvalue())
+                self.assertIn(status.upper() + ":", printed.getvalue())
 
-    def test_non_xpu_non_nvidia_int8_is_unsupported_before_launch_or_timing(self):
-        with TemporaryDirectory() as directory:
-            for vendor in ("kunlunxin", "amd", "metax", "other_vendor"):
-                metadata = {"vendor_name": vendor, "backend": "cuda"}
-                path = Path(directory) / f"{vendor}.json"
-                with self.subTest(vendor=vendor), \
-                     mock.patch("sys.argv", ["bench_vector.py", "--dtype", "int8",
-                                             "--output", str(path)]), \
-                     mock.patch.object(vector, "setup_device", return_value=metadata), \
-                     mock.patch.object(vector, "run_benchmark") as run, \
-                     redirect_stdout(io.StringIO()):
-                    vector.main()
-                run.assert_not_called()
-                document = json.loads(path.read_text())
-                self.assertEqual(document["status"], "unsupported")
-                self.assertEqual(document["results"], [])
-                self.assertIn("benchmark-path limitation", document["reason"])
-        args = vector.build_parser().parse_args(["--dtype", "int8"])
-        with mock.patch.object(vector, "get_device") as device, \
-             self.assertRaises(vector.UnsupportedVectorDtype):
-            vector.run_benchmark(args, {"vendor_name": "kunlunxin"}, True)
-        device.assert_not_called()
-        self.assertIsNone(vector.unsupported_dtype_reason(
-            "int8", {"vendor_name": "kunlunxin", "backend": "xpu"}))
+    def test_other_vendor_typed_int8_attempt_is_numeric_but_unverified(self):
+        args = vector.build_parser().parse_args([
+            "--dtype", "int8", "--block-sizes", "64", "--blocks-per-sm", "1",
+            "--num-warps", "4", "--unroll", "1", "--iterations", "4"])
+        metadata = {"vendor_name": "amd", "backend": "hip", "sm_count": 1}
+        vector.configure_sweep(args, metadata)
+        self.assertIsNone(vector.unsupported_dtype_reason("int8", metadata))
+
+        def launch(kernel, grid, inputs, output, coeff, elements, iterations, *unused):
+            self.assertEqual(inputs.dtype, torch.int8)
+            self.assertEqual(output.dtype, torch.int8)
+            state = inputs.clone()
+            for _ in range(iterations):
+                state = state * coeff[0] + coeff[1:, None]
+            output.copy_(state)
+            return SimpleNamespace(asm={}, n_regs=32, n_spills=0)
+
+        with mock.patch.object(vector, "get_device", return_value=torch.device("cpu")), \
+             mock.patch.object(vector, "available_memory_bytes", return_value=None), \
+             mock.patch.object(vector, "launch_vector", side_effect=launch), \
+             mock.patch.object(vector, "measure", return_value={"min_ms": 1.0, "median_ms": 2.0}), \
+             mock.patch.object(vector, "emit_results") as emit, \
+             redirect_stdout(io.StringIO()):
+            vector.run_benchmark(args, metadata, False)
+        name, _, _, rows = emit.call_args.args
+        self.assertEqual(name, "vector_int8_mul_add")
+        self.assertEqual(rows[0]["operation"], "INT8_MUL_ADD_MOD256")
+        self.assertEqual(rows[0]["counted_integer_ops"], 2 * 8 * 64 * 4)
+        self.assertFalse(rows[0]["native_arithmetic_verified"])
 
     def test_compile_classification_requires_explicit_arithmetic_capability(self):
         unsupported = (

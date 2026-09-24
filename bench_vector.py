@@ -10,8 +10,8 @@ import triton
 import triton.language as tl
 from triton.compiler.errors import CompilationError
 
-from common import (add_common_arguments, available_memory_bytes, emit_results,
-                    emit_unsupported, get_device, measure, positive_int,
+from common import (add_common_arguments, available_memory_bytes, emit_not_implemented,
+                    emit_results, emit_unsupported, get_device, measure, positive_int,
                     reference_device, setup_device)
 
 
@@ -23,6 +23,10 @@ DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
 
 class UnsupportedVectorDtype(RuntimeError):
     """The requested arithmetic cannot be provided by this benchmark/backend."""
+
+
+class NotImplementedVectorDtype(RuntimeError):
+    """This benchmark lacks a native path for the requested arithmetic."""
 
 
 @triton.jit
@@ -420,19 +424,16 @@ def unsupported_dtype_reason(dtype, metadata):
         return "FlagGems reports that this device does not support FP64 arithmetic"
     if dtype == "bf16" and metadata.get("supports_bf16") is False:
         return "FlagGems reports that this device does not support BF16 arithmetic"
-    if dtype == "int8" and metadata.get("vendor_name") != "nvidia" and not _is_flagtree_xpu(metadata):
-        return ("This benchmark has no implemented and verified native INT8 vector instruction "
-                "path for this backend; unpacking INT8 values and computing in INT32 does not "
-                "measure native INT8 throughput. This is a benchmark-path limitation, "
-                "not a claim that the chip lacks INT8 instructions")
+    return None
+
+
+def not_implemented_dtype_reason(dtype):
     if dtype == "fp8":
         # FP8 tensor-core/storage support does not establish native elementwise
-        # FP8 arithmetic. Do not risk a backend abort or publish widened math as
-        # an FP8 vector peak without an implemented native instruction path.
+        # FP8 arithmetic. Do not publish widened math as an FP8 vector peak.
         return ("This benchmark has no implemented and verified native FP8 vector arithmetic "
                 "path; FP8 storage, conversions, or tensor instructions do not measure native "
-                "FP8 vector throughput. This is a benchmark-path limitation, not a claim that "
-                "the chip lacks FP8 instructions")
+                "FP8 vector throughput. This does not determine chip support")
     return None
 
 
@@ -506,13 +507,18 @@ def run_benchmark(args, metadata, is_xpu):
     reason = unsupported_dtype_reason(args.dtype, metadata)
     if reason:
         raise UnsupportedVectorDtype(reason)
+    reason = not_implemented_dtype_reason(args.dtype)
+    if reason:
+        raise NotImplementedVectorDtype(reason)
     if not metadata.get("sm_count"):
         raise SystemExit("The runtime did not expose the compute-unit count; "
                          "supply the chip's count with --compute-units")
     device = get_device(args)
     is_int8 = args.dtype == "int8"
     use_dp4a = is_int8 and not is_xpu and metadata["vendor_name"] == "nvidia"
-    int8_mul_add = is_int8 and is_xpu
+    # On backends without NVIDIA DP4A, try typed INT8 arithmetic. If final ISA
+    # cannot be audited, keep the numeric result but mark it unverified.
+    int8_mul_add = is_int8 and not use_dp4a
     use_explicit_fma = not is_xpu and not is_int8
     source_operation = ("INT8_MUL_ADD_MOD256" if int8_mul_add else "DP4A") if is_int8 else (
         "FMA" if use_explicit_fma else "MUL_ADD")
@@ -521,7 +527,7 @@ def run_benchmark(args, metadata, is_xpu):
     print(f"{args.dtype.upper()} vector: {CHAINS} independent {source_operation} chains, "
           f"{args.iterations} iterations; {8 if use_dp4a else 2} operations per update")
     if int8_mul_add:
-        print("XPU uses INT8 input, coefficients, state and output with modulo-256 multiply/add; "
+        print("Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; "
               "native instruction verification requires explicit final ISA evidence")
     elif is_int8:
         print("INT8 lanes are packed in INT32 words; each dot4 uses four signed products "
@@ -691,10 +697,16 @@ def main():
     if reason:
         emit_unsupported(f"vector_{args.dtype}", metadata, args, reason)
         return
+    reason = not_implemented_dtype_reason(args.dtype)
+    if reason:
+        emit_not_implemented(f"vector_{args.dtype}", metadata, args, reason)
+        return
     try:
         run_benchmark(args, metadata, is_xpu)
     except UnsupportedVectorDtype as exc:
         emit_unsupported(f"vector_{args.dtype}", metadata, args, str(exc))
+    except NotImplementedVectorDtype as exc:
+        emit_not_implemented(f"vector_{args.dtype}", metadata, args, str(exc))
 
 
 if __name__ == "__main__":

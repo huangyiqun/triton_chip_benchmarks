@@ -223,7 +223,10 @@ def setup_device(args):
         "total_memory_bytes": int(total) if total else None,
         "memory_capacity_gib": float(total) / 2**30 if total else None,
         "l2_cache_bytes": int(l2),
-        "supports_fp64": bool(getattr(detector, "support_fp64", False)),
+        # An absent capability query is unknown, not proof that FP64 is absent.
+        # The benchmark can still try the backend and classify an explicit
+        # compiler or runtime rejection after that attempt.
+        "supports_fp64": getattr(detector, "support_fp64", None),
         "supports_bf16": bf16,
         "torch_version": torch.__version__, "triton_version": triton.__version__,
         "flaggems_version": getattr(gems, "__version__", "unknown"),
@@ -495,11 +498,11 @@ def _write_document(args, document):
     print(f"JSON: {args.output.resolve()}")
 
 
-def emit_unsupported(name, metadata, args, reason, *, details=None):
-    """Emit a machine-readable unsupported result without inventing a value."""
+def _emit_no_measurement(name, metadata, args, reason, status, *, details=None):
+    """Record why a requested metric has no value without inventing one."""
     document = {
         "benchmark": name,
-        "status": "unsupported",
+        "status": status,
         "reason": str(reason),
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "device": metadata,
@@ -508,9 +511,19 @@ def emit_unsupported(name, metadata, args, reason, *, details=None):
     }
     if details is not None:
         document["details"] = details
-    print(f"UNSUPPORTED: {reason}")
+    print(f"{status.upper()}: {reason}")
     _write_document(args, document)
     return document
+
+
+def emit_unsupported(name, metadata, args, reason, *, details=None):
+    """Emit an explicit backend or device capability rejection."""
+    return _emit_no_measurement(name, metadata, args, reason, "unsupported", details=details)
+
+
+def emit_not_implemented(name, metadata, args, reason, *, details=None):
+    """Emit a benchmark implementation gap, not a device capability claim."""
+    return _emit_no_measurement(name, metadata, args, reason, "not_implemented", details=details)
 
 
 def emit_results(name, metadata, args, rows):

@@ -308,6 +308,7 @@ class RuntimeTests(unittest.TestCase):
         self.configure()
         del common.flag_gems.runtime.device.support_fp64
         self.assertEqual(str(common.reference_device(FakeDevice("npu", 1))), "cpu")
+        self.assertIsNone(self.set_up_device()["supports_fp64"])
 
     def test_supported_fp64_keeps_reference_on_selected_device(self):
         self.configure(support_fp64=True)

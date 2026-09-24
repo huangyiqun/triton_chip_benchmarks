@@ -93,7 +93,7 @@ def summarize(metric, document):
     """
     result = empty_metric(metric)
     status = document.get("status")
-    if status in ("unsupported", "error", "unavailable"):
+    if status in ("unsupported", "not_implemented", "error", "unavailable"):
         result.update(status=status, reason=document.get("reason", status))
         return result
     if metric.key == "memory_capacity":
