@@ -2,7 +2,7 @@
   "benchmark": "tensor",
   "status": "unsupported",
   "reason": "FlagGems reports no FP64 support for ascend",
-  "timestamp_utc": "2026-10-10T12:15:27.043939+00:00",
+  "timestamp_utc": "2026-10-10T13:08:08.141788+00:00",
   "device": {
     "device_index": 5,
     "device_type": "npu",

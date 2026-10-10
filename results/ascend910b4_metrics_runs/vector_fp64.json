@@ -2,7 +2,7 @@
   "benchmark": "vector_fp64",
   "status": "unsupported",
   "reason": "FlagGems reports that this device does not support FP64 arithmetic",
-  "timestamp_utc": "2026-10-10T12:24:52.470543+00:00",
+  "timestamp_utc": "2026-10-10T13:11:23.658018+00:00",
   "device": {
     "device_index": 5,
     "device_type": "npu",

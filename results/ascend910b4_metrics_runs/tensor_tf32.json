@@ -2,7 +2,7 @@
   "benchmark": "tensor",
   "status": "unsupported",
   "reason": "The backend did not honor tl.dot input_precision='tf32': precision probe expected first value 1.0, observed 1.000244140625, max absolute error 0.000244140625.",
-  "timestamp_utc": "2026-10-10T12:14:42.303141+00:00",
+  "timestamp_utc": "2026-10-10T13:07:28.627946+00:00",
   "device": {
     "device_index": 5,
     "device_type": "npu",

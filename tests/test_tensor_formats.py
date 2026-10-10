@@ -186,6 +186,54 @@ class TensorFormatTests(unittest.TestCase):
             self.assertIn("FP64", document["reason"])
             run.assert_not_called()
 
+    def test_fp8_storage_probe_accepts_a_faithful_round_trip(self):
+        probe = tensor._validate_fp8_storage("cpu", tensor.torch.float8_e4m3fn)
+        self.assertTrue(probe["passed"])
+        self.assertEqual(probe["max_abs_error"], 0.0)
+
+    def test_fp8_allocation_failure_is_reported_as_unsupported_not_error(self):
+        failure = RuntimeError("call aclnnInplaceCopy failed, error code is 561103")
+        with mock.patch.object(tensor.torch.Tensor, "to", side_effect=failure):
+            with self.assertRaises(tensor.TensorUnsupportedError) as caught:
+                tensor._validate_fp8_storage("cpu", tensor.torch.float8_e4m3fn)
+        self.assertIsNotNone(tensor._unsupported_reason(caught.exception))
+
+    def test_fp8_storage_failure_writes_unsupported_and_skips_measurement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "result.json"
+            failure = RuntimeError("call aclnnInplaceCopy failed, error code is 561103")
+            with mock.patch("sys.argv", ["bench_tensor.py", "--dtype", "fp8",
+                                         "--output", str(path)]), \
+                 mock.patch.object(tensor, "setup_device",
+                                   return_value={"vendor_name": "example"}), \
+                 mock.patch.object(tensor, "get_device", return_value="cpu"), \
+                 mock.patch.object(tensor.torch.Tensor, "to", side_effect=failure), \
+                 mock.patch.object(tensor, "run_peak") as run, redirect_stdout(io.StringIO()):
+                tensor.main()
+            document = json.loads(path.read_text())
+            self.assertEqual(document["status"], "unsupported")
+            self.assertEqual(document["results"], [])
+            self.assertIn("float8_e4m3fn", document["reason"])
+            run.assert_not_called()
+
+    def test_fp8_storage_probe_rejects_a_lossy_round_trip(self):
+        original = tensor.torch.Tensor.float
+
+        def lossy(self, *args, **kwargs):
+            return original(self, *args, **kwargs) + 2.0**-4
+
+        with mock.patch.object(tensor.torch.Tensor, "float", lossy):
+            with self.assertRaises(tensor.TensorUnsupportedError) as caught:
+                tensor._validate_fp8_storage("cpu", tensor.torch.float8_e4m3fn)
+        self.assertIn("did not preserve", str(caught.exception))
+
+    def test_fp8_device_fault_during_probe_is_not_called_unsupported(self):
+        failure = RuntimeError("NPU illegal memory access was encountered")
+        with mock.patch.object(tensor.torch.Tensor, "to", side_effect=failure):
+            with self.assertRaises(tensor.TensorUnsupportedError) as caught:
+                tensor._validate_fp8_storage("cpu", tensor.torch.float8_e4m3fn)
+        self.assertIsNone(tensor._unsupported_reason(caught.exception))
+
     def test_unsupported_compile_never_enters_timer(self):
         args = self.arguments("--dtype", "int8", "--quick")
         with mock.patch.object(tensor, "available_memory_bytes", return_value=None), \

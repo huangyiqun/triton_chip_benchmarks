@@ -424,6 +424,28 @@ def _validate_fp64_precision(device, mode: str) -> dict:
             "description": "FP64 (1+2^-40) times identity; rejects FP32 fallback"}
 
 
+def _validate_fp8_storage(device, dtype: torch.dtype) -> dict:
+    """Reject devices that expose the FP8 dtype but cannot hold FP8 tensors."""
+    # Multiples of 1/16 are exact in E4M3FN, so a faithful storage and
+    # conversion path round-trips them bit for bit. Allocation, conversion or
+    # copy failures here are capability rejections, not measurement failures;
+    # resource exhaustion and device faults stay visible through the cause
+    # chain, which _unsupported_reason inspects before trusting this class.
+    probe = torch.tensor([1 / 16, -1 / 16, 1.0], dtype=torch.float32, device=device)
+    try:
+        restored = probe.to(dtype).float()
+    except Exception as exc:
+        raise TensorUnsupportedError(
+            f"The backend cannot materialize {dtype} tensors on this device: {exc}") from exc
+    error = (restored - probe).abs().max().item()
+    if error != 0.0:
+        raise TensorUnsupportedError(
+            f"The backend did not preserve {dtype} storage; round-trip error={error}")
+    return {"passed": True, "max_abs_error": error,
+            "probe_values": [1 / 16, -1 / 16, 1.0],
+            "description": "FP8 E4M3FN storage round-trip of exactly representable values"}
+
+
 def _instruction_name(line: str) -> str:
     for piece in line.strip().split():
         if piece.startswith("@") or piece.endswith(":"):
@@ -775,6 +797,8 @@ def main() -> None:
                 device, args.input_precision, args.mode)
         elif args.dtype == "fp64":
             metadata["tensor_precision_probe"] = _validate_fp64_precision(device, args.mode)
+        elif args.dtype == "fp8":
+            metadata["tensor_storage_probe"] = _validate_fp8_storage(device, dtype)
     except Exception as exc:
         reason = _unsupported_reason(exc)
         if reason is None:

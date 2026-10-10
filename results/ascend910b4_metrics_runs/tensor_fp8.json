@@ -1,0 +1,58 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "The backend cannot materialize torch.float8_e4m3fn tensors on this device: copy_d2d_baseformat_opapi:../torch_npu/csrc/aten/ops/op_api/CopyKernelOpApi.cpp:90 NPU function error: call aclnnInplaceCopy failed, error code is 561103\n[ERROR] 2026-10-10-21:08:25 (PID:2568316, Device:5, RankID:-1) ERR00100 PTA call acl api failed.\n",
+  "timestamp_utc": "2026-10-10T13:08:25.981340+00:00",
+  "device": {
+    "device_index": 5,
+    "device_type": "npu",
+    "device_name": "Ascend910B4-1",
+    "vendor_name": "ascend",
+    "backend": "npu",
+    "architecture": "Ascend910B4-1",
+    "sm_count": 40,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 65452113920,
+    "memory_capacity_gib": 60.95703125,
+    "l2_cache_bytes": 176160768,
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.9.0+cpu",
+    "triton_version": "3.5.1",
+    "flaggems_version": "5.0.2",
+    "device_api": "torch_npu.npu",
+    "input_format": "e4m3fn",
+    "input_storage_dtype": "e4m3fn",
+    "dot_input_precision": null,
+    "math_mode": "fp8"
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp8",
+    "input_precision": null,
+    "quick": false,
+    "device": 5,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "events",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_fp8.json",
+    "requested_dtype": "fp8"
+  },
+  "results": []
+}

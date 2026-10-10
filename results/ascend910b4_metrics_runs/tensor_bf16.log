@@ -10,13 +10,13 @@ Instruction audit unavailable for ascend; native tensor execution is unverified.
 Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
  tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
 Timing: events via FlagGems ascend device events
-   32/32/32          1      4     0.4275    0.4273        12.56      12.56     0
-   32/32/32          2      4     0.8532    0.8529        12.58      12.59     0
-   32/32/32          4      4     1.7044    1.7022        12.60      12.62     0
-   32/32/32          8      4     3.4036    3.4008        12.62      12.63     0
-   64/64/32          1      4     0.6397    0.6389        33.57      33.61     0
-   64/64/32          2      4     1.2778    1.2763        33.61      33.65     0
-   64/64/32          4      4     2.5551    2.5539        33.62      33.64     0
-   64/64/32          8      4     5.1077    5.1027        33.64      33.67     0
-Measured tl.dot throughput (native execution unverified): 33.67 TFLOP/s (same configuration median 33.64 TFLOP/s; best observed timing sample, dense bf16)
+   32/32/32          1      4     0.4275    0.4272        12.56      12.57     0
+   32/32/32          2      4     0.8529    0.8527        12.59      12.59     0
+   32/32/32          4      4     1.7042    1.7022        12.60      12.62     0
+   32/32/32          8      4     3.4066    3.4026        12.61      12.62     0
+   64/64/32          1      4     0.6398    0.6396        33.57      33.57     0
+   64/64/32          2      4     1.2782    1.2764        33.60      33.65     0
+   64/64/32          4      4     2.5545    2.5512        33.63      33.67     0
+   64/64/32          8      4     5.1084    5.0943        33.63      33.72     0
+Measured tl.dot throughput (native execution unverified): 33.72 TFLOP/s (same configuration median 33.63 TFLOP/s; best observed timing sample, dense bf16)
 JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_bf16.json
