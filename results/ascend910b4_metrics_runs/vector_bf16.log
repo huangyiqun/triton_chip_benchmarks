@@ -1,0 +1,37 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+BF16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+/workspace/triton_chip_benchmarks/bench_vector.py:575: UserWarning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (Triggered internally at ../torch_npu/csrc/aten/common/TensorFactories.cpp:340.)
+  output = torch.empty_like(inputs)
+Timing: events via FlagGems ascend device events
+          8    256      4       1          0    5.28454        1.016      1.016
+          8    256      4       4          0    5.19229        1.034      1.035
+          8    256      4       8          0    5.18760        1.035      1.037
+          8    256      8       1          0    5.27780        1.017      1.017
+          8    256      8       4          0    5.19208        1.034      1.036
+          8    256      8       8          0    5.18793        1.035      1.035
+          8    512      4       1          0    6.59670        1.628      1.628
+          8    512      4       4          0    6.48456        1.656      1.657
+          8    512      4       8          0    6.48615        1.655      1.656
+          8    512      8       1          0    6.59464        1.628      1.629
+          8    512      8       4          0    6.48495        1.656      1.656
+          8    512      8       8          0    6.48212        1.656      1.658
+         16    256      4       1          0   10.57676        1.015      1.022
+         16    256      4       4          0   10.37737        1.035      1.035
+         16    256      4       8          0   10.36719        1.036      1.036
+         16    256      8       1          0   10.56554        1.016      1.017
+         16    256      8       4          0   10.37896        1.035      1.035
+         16    256      8       8          0   10.36851        1.036      1.036
+         16    512      4       1          0   13.18704        1.628      1.630
+         16    512      4       4          0   12.96892        1.656      1.657
+         16    512      4       8          0   12.96176        1.657      1.659
+         16    512      8       1          0   13.19409        1.628      1.628
+         16    512      8       4          0   12.97567        1.655      1.657
+         16    512      8       8          0   12.96730        1.656      1.657
+Peak measured BF16 vector workload throughput: 1.659 TFLOP/s (median 1.657 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=4)
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/vector_bf16.json

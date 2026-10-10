@@ -1,0 +1,58 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "The backend did not honor tl.dot input_precision='tf32': precision probe expected first value 1.0, observed 1.000244140625, max absolute error 0.000244140625.",
+  "timestamp_utc": "2026-10-10T12:14:42.303141+00:00",
+  "device": {
+    "device_index": 5,
+    "device_type": "npu",
+    "device_name": "Ascend910B4-1",
+    "vendor_name": "ascend",
+    "backend": "npu",
+    "architecture": "Ascend910B4-1",
+    "sm_count": 40,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 65452113920,
+    "memory_capacity_gib": 60.95703125,
+    "l2_cache_bytes": 176160768,
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.9.0+cpu",
+    "triton_version": "3.5.1",
+    "flaggems_version": "5.0.2",
+    "device_api": "torch_npu.npu",
+    "input_format": "fp32",
+    "input_storage_dtype": "fp32",
+    "dot_input_precision": "tf32",
+    "math_mode": "tf32"
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp32",
+    "input_precision": "tf32",
+    "quick": false,
+    "device": 5,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "events",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_tf32.json",
+    "requested_dtype": "fp32"
+  },
+  "results": []
+}

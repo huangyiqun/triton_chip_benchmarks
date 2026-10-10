@@ -1,0 +1,22 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: events via FlagGems ascend device events
+   32/32/32          1      4     0.4275    0.4273        12.56      12.56     0
+   32/32/32          2      4     0.8532    0.8529        12.58      12.59     0
+   32/32/32          4      4     1.7044    1.7022        12.60      12.62     0
+   32/32/32          8      4     3.4036    3.4008        12.62      12.63     0
+   64/64/32          1      4     0.6397    0.6389        33.57      33.61     0
+   64/64/32          2      4     1.2778    1.2763        33.61      33.65     0
+   64/64/32          4      4     2.5551    2.5539        33.62      33.64     0
+   64/64/32          8      4     5.1077    5.1027        33.64      33.67     0
+Measured tl.dot throughput (native execution unverified): 33.67 TFLOP/s (same configuration median 33.64 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_bf16.json

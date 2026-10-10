@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "device": {
+    "device_index": 5,
+    "device_type": "npu",
+    "device_name": "Ascend910B4-1",
+    "vendor_name": "ascend",
+    "backend": "npu",
+    "architecture": "Ascend910B4-1",
+    "sm_count": 40,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 65452113920,
+    "memory_capacity_gib": 60.95703125,
+    "l2_cache_bytes": 176160768,
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.9.0+cpu",
+    "triton_version": "3.5.1",
+    "flaggems_version": "5.0.2",
+    "device_api": "torch_npu.npu"
+  },
+  "results": []
+}

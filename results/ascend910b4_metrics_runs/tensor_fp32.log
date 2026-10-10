@@ -1,0 +1,30 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, IEEE dot precision, two independent FP32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: events via FlagGems ascend device events
+   32/32/32          1      4     0.6407    0.6404         8.38       8.38     0
+   32/32/32          2      4     1.2781    1.2778         8.40       8.40     0
+   32/32/32          4      4     2.5550    2.5542         8.40       8.41     0
+   32/32/32          8      4     5.1079    5.1067         8.41       8.41     0
+   32/64/32          1      4     0.8525    0.8521        12.60      12.60     0
+   32/64/32          2      4     1.7036    1.6995        12.61      12.64     0
+   32/64/32          4      4     3.4042    3.4031        12.62      12.62     0
+   32/64/32          8      4     6.7975    6.7937        12.64      12.64     0
+   64/32/32          1      4     0.6410    0.6404        16.75      16.77     0
+   64/32/32          2      4     1.2784    1.2772        16.80      16.81     0
+   64/32/32          4      4     2.5538    2.5512        16.82      16.83     0
+   64/32/32          8      4     5.1072    5.1055        16.82      16.82     0
+   64/64/32          1      4     1.0647    1.0643        20.17      20.18     0
+   64/64/32          2      4     2.1274    2.1266        20.19      20.20     0
+   64/64/32          4      4     4.2484    4.2444        20.22      20.24     0
+   64/64/32          8      4     8.4846    8.4834        20.25      20.25     0
+Measured IEEE FP32 matrix throughput: 20.25 TFLOP/s (same configuration median 20.25 TFLOP/s; best observed timing sample, dense ieee_fp32)
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_fp32.json

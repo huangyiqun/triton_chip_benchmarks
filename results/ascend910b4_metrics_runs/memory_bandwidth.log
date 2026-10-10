@@ -1,0 +1,67 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+/workspace/triton_chip_benchmarks/bench_bandwidth.py:140: UserWarning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (Triggered internally at ../torch_npu/csrc/aten/common/TensorFactories.cpp:340.)
+  small_dst = torch.full_like(small_src, float("nan"))
+Validation: masked tails passed; every measured output is checked in full.
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. GB/s and TB/s use decimal units; peak uses the shortest timed sample.
+mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s
+Note: 256 MiB per buffer excluded from the HBM-sized peak summary: buffer is smaller than 4x L2.
+Timing: events via FlagGems ascend device events
+copy         256    1024      4    0.583404    0.584691      920.24       918.21
+read         256    1024      4    0.851383    0.852338      315.60       315.25
+copy         256    1024      8    0.582701    0.583651      921.35       919.85
+read         256    1024      8    0.846265    0.852852      317.51       315.06
+copy         256    4096      4    0.464472    0.465312     1155.87      1153.79
+read         256    4096      4    0.275654    0.276161      974.05       972.26
+copy         256    4096      8    0.463294    0.463878     1158.81      1157.35
+read         256    4096      8    0.276044    0.276483      972.68       971.13
+copy         256   16384      4    0.446618    0.446932     1202.08      1201.24
+read         256   16384      4    0.184457    0.184737     1455.37      1453.16
+copy         256   16384      8    0.445772    0.446505     1204.36      1202.38
+read         256   16384      8    0.184474    0.184842     1455.23      1452.34
+Note: 512 MiB per buffer excluded from the HBM-sized peak summary: buffer is smaller than 4x L2.
+copy         512    1024      4    1.151440    1.154439      932.52       930.10
+read         512    1024      4    1.701410    1.705515      315.85       315.09
+copy         512    1024      8    1.151956    1.154390      932.10       930.14
+read         512    1024      8    1.703760    1.705903      315.42       315.02
+copy         512    4096      4    0.912798    0.914770     1176.32      1173.78
+read         512    4096      4    0.553793    0.554379      969.68       968.66
+copy         512    4096      8    0.913178    0.914725     1175.83      1173.84
+read         512    4096      8    0.554337    0.554845      968.73       967.84
+copy         512   16384      4    0.889760    0.890550     1206.78      1205.71
+read         512   16384      4    0.356792    0.357655     1504.81      1501.18
+copy         512   16384      8    0.888933    0.889707     1207.90      1206.85
+read         512   16384      8    0.356866    0.357734     1504.50      1500.85
+copy        1024    1024      4    2.208728    2.216544      972.27       968.84
+read        1024    1024      4    3.405100    3.408830      315.64       315.30
+copy        1024    1024      8    2.210880    2.215896      971.33       969.13
+read        1024    1024      8    3.399173    3.405617      316.19       315.59
+copy        1024    4096      4    1.715253    1.719080     1251.99      1249.21
+read        1024    4096      4    1.093093    1.094058      982.54       981.67
+copy        1024    4096      8    1.711517    1.717490     1254.73      1250.36
+read        1024    4096      8    1.093633    1.095327      982.05       980.53
+copy        1024   16384      4    1.710510    1.713948     1255.46      1252.95
+read        1024   16384      4    0.746104    0.760041     1439.22      1412.83
+copy        1024   16384      8    1.709100    1.712083     1256.50      1254.31
+read        1024   16384      8    0.739854    0.752710     1451.38      1426.59
+copy        2048    1024      4    4.486907    4.502233      957.22       953.96
+read        2048    1024      4    6.789930    6.797610      316.58       316.23
+copy        2048    1024      8    4.494113    4.503960      955.69       953.60
+read        2048    1024      8    6.790640    6.794900      316.55       316.35
+copy        2048    4096      4    3.488367    3.496733     1231.23      1228.28
+read        2048    4096      4    2.176160    2.182000      987.06       984.42
+copy        2048    4096      8    3.490227    3.493597     1230.57      1229.38
+read        2048    4096      8    2.177564    2.183524      986.43       983.73
+copy        2048   16384      4    3.441880    3.450683     1247.86      1244.67
+read        2048   16384      4    1.455374    1.475404     1475.64      1455.61
+copy        2048   16384      8    3.443780    3.454993     1247.17      1243.12
+read        2048   16384      8    1.436560    1.488340     1494.97      1442.96
+Best measured copy bandwidth: 1256.50 GB/s (1.256 TB/s), 1024 MiB/buffer, block=16384, warps=8.
+Best measured read bandwidth: 1494.97 GB/s (1.495 TB/s), 2048 MiB/buffer, block=16384, warps=8.
+Highest measured HBM-sized pattern: read, 1.495 TB/s (best observed timing, not a theoretical limit).
+These are effective bytes requested by the kernels; read includes a block reduction. Physical DRAM traffic and other access patterns can differ.
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/memory_bandwidth.json

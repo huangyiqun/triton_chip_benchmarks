@@ -25,6 +25,12 @@ DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
           "int8": torch.int8, "fp64": torch.float64,
           "fp8": getattr(torch, "float8_e4m3fn", None)}
 
+# Typed INT8 arithmetic needs the explicit builtins to pass sanitize_overflow.
+# Some Triton/FlagTree versions do not re-export every one of them from
+# triton.language, so fall back to the same builtins in triton.language.core.
+_TL_MUL = getattr(tl, "mul", None) or tl.core.mul
+_TL_ADD = getattr(tl, "add", None) or tl.core.add
+
 
 class UnsupportedVectorDtype(RuntimeError):
     """The requested arithmetic cannot be provided by this benchmark/backend."""
@@ -53,8 +59,8 @@ def _int8_mul_add_update(x, a, b):
     # XPU has a distinct typed INT8 path, without packed INT32 emulation.
     # Overflow is intentional modulo 256. The XPU default sanitizer would
     # otherwise widen the computation and insert overflow assertions.
-    product = tl.mul(x, a, sanitize_overflow=False).to(tl.int8)
-    return tl.add(product, b, sanitize_overflow=False).to(tl.int8)
+    product = _TL_MUL(x, a, sanitize_overflow=False).to(tl.int8)
+    return _TL_ADD(product, b, sanitize_overflow=False).to(tl.int8)
 
 
 @triton.jit
@@ -87,7 +93,10 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
     # The CLI requires exact divisibility, so each lane still executes exactly
     # ITERATIONS * 8 updates. Independent chains hide dependency latency.
     for _ in tl.range(0, ITERATIONS // UNROLL, loop_unroll_factor=1):
-        for _ in tl.static_range(UNROLL):
+        # The inner index keeps a distinct name: reusing the outer loop's name
+        # rebinds its loop-carried value to a constexpr, which some frontends
+        # reject when they check loop-carried types.
+        for _unrolled in tl.static_range(UNROLL):
             if IS_INT8 and USE_DP4A:
                 x0 = _dp4a_update(x0, a, b0)
                 x1 = _dp4a_update(x1, a, b1)

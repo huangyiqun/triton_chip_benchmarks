@@ -1,0 +1,39 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 4096 iterations; 2 operations per update
+Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+/workspace/triton_chip_benchmarks/bench_vector.py:575: UserWarning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (Triggered internally at ../torch_npu/csrc/aten/common/TensorFactories.cpp:340.)
+  output = torch.empty_like(inputs)
+Timing: events via FlagGems ascend device events
+          8    256      4       1          0   88.46927        0.061      0.061
+          8    256      4       4          0   26.10375        0.206      0.206
+          8    256      4       8          0   15.65866        0.343      0.343
+          8    256      8       1          0   88.42236        0.061      0.061
+          8    256      8       4          0   26.07886        0.206      0.206
+          8    256      8       8          0   15.65966        0.343      0.343
+          8    512      4       1          0   91.27533        0.118      0.118
+          8    512      4       4          0   27.75696        0.387      0.387
+          8    512      4       8          0   17.15359        0.626      0.626
+          8    512      8       1          0   91.27734        0.118      0.118
+          8    512      8       4          0   27.76241        0.387      0.388
+          8    512      8       8          0   17.14636        0.626      0.627
+         16    256      4       1          0  176.75134        0.061      0.061
+         16    256      4       4          0   52.08105        0.206      0.206
+         16    256      4       8          0   31.23556        0.344      0.344
+         16    256      8       1          0  176.75684        0.061      0.061
+         16    256      8       4          0   52.09786        0.206      0.206
+         16    256      8       8          0   31.23850        0.344      0.344
+         16    512      4       1          0  182.47591        0.118      0.118
+         16    512      4       4          0   55.43104        0.387      0.387
+         16    512      4       8          0   34.21009        0.628      0.628
+         16    512      8       1          0  182.49771        0.118      0.118
+         16    512      8       4          0   55.42890        0.387      0.387
+         16    512      8       8          0   34.21653        0.628      0.628
+Peak measured INT8 vector workload throughput: 0.628 TOPS (median 0.628 TOPS; blocks/unit=16, block=512, unroll=8, warps=8)
+This numeric result measures the typed INT8 source workload; it is not a verified native INT8 vector peak
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/vector_int8.json

@@ -1,0 +1,22 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident int8 operands, two independent INT32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
+Timing: events via FlagGems ascend device events
+   32/32/64          1      4     0.4309    0.4307        24.92      24.93     0
+   32/32/64          2      4     0.8593    0.8588        24.99      25.01     0
+   32/32/64          4      4     1.7149    1.7127        25.05      25.08     0
+   32/32/64          8      4     3.4260    3.4213        25.07      25.11     0
+   64/64/64          1      4     0.6400    0.6399        67.11      67.12     0
+   64/64/64          2      4     1.2785    1.2775        67.19      67.24     0
+   64/64/64          4      4     2.5553    2.5545        67.23      67.25     0
+   64/64/64          8      4     5.1096    5.1072        67.25      67.28     0
+Measured tl.dot throughput (native execution unverified): 67.28 TOPS (same configuration median 67.25 TOPS; best observed timing sample, dense int8)
+JSON: /workspace/triton_chip_benchmarks/results/ascend910b4_metrics_runs/tensor_int8.json

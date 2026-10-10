@@ -1,0 +1,26 @@
+/usr/local/python3.11.15/lib/python3.11/site-packages/torch_npu/npu/__init__.py:539: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/usr/local/python3.11.15/lib/python3.11/site-packages/flag_gems/utils/device_info.py:44: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+Device npu:5: Ascend910B4-1 | vendor=ascend | Triton=npu/Ascend910B4-1 | compute units=40 | memory=61.0 GiB
+FlagGems 5.0.2, PyTorch 2.9.0+cpu, Triton 3.5.1; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp8 operands, two independent FP32 accumulator chains
+FP8 E4M3FN: backend accumulation policy (internal precision is hardware-dependent); exact-check inputs
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Traceback (most recent call last):
+  File "/workspace/triton_chip_benchmarks/bench_tensor.py", line 880, in <module>
+    main()
+  File "/workspace/triton_chip_benchmarks/bench_tensor.py", line 785, in main
+    run_peak(args, metadata, dtype, device)
+  File "/workspace/triton_chip_benchmarks/bench_tensor.py", line 616, in run_peak
+    a, b, c = _peak_inputs(blocks, config, dtype, device)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/triton_chip_benchmarks/bench_tensor.py", line 345, in _peak_inputs
+    a = a.to(dtype)
+        ^^^^^^^^^^^
+RuntimeError: copy_d2d_baseformat_opapi:../torch_npu/csrc/aten/ops/op_api/CopyKernelOpApi.cpp:90 NPU function error: call aclnnInplaceCopy failed, error code is 561103
+[ERROR] 2026-10-10-20:15:45 (PID:2487027, Device:5, RankID:-1) ERR00100 PTA call acl api failed.
+
