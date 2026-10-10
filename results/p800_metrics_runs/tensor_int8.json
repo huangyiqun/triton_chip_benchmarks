@@ -1,0 +1,59 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "The FlagTree XPU backend does not support tl.dot with INT8 operands: a minimal 32x32x32 INT8 dot fails (CUDA error: an illegal memory access was encountered). This is a backend limitation, not a determination of chip support",
+  "timestamp_utc": "2026-10-10T13:19:03.491900+00:00",
+  "device": {
+    "device_index": 6,
+    "device_type": "cuda",
+    "device_name": "GPU",
+    "vendor_name": "kunlunxin",
+    "backend": "cuda",
+    "architecture": "3",
+    "sm_count": 8,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 103079215104,
+    "memory_capacity_gib": 96.0,
+    "l2_cache_bytes": 100663296,
+    "l2_cache_source": "xpu-smi L3 capacity",
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.9.0+cu129",
+    "triton_version": "3.6.0",
+    "flaggems_version": "4.2.1.rc.0",
+    "device_api": "torch.cuda",
+    "input_format": "int8",
+    "input_storage_dtype": "int8",
+    "dot_input_precision": null,
+    "math_mode": "int8"
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "int8",
+    "input_precision": null,
+    "quick": false,
+    "device": 6,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "events",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/p800_metrics_runs/tensor_int8.json",
+    "requested_dtype": "int8"
+  },
+  "results": []
+}

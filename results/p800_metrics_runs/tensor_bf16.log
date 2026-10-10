@@ -1,0 +1,20 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Instruction audit unavailable for kunlunxin; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: events via FlagGems kunlunxin device events
+   32/32/32          1      4     0.0506    0.0506        21.23      21.24     0
+   32/32/32          2      4     0.0991    0.0991        21.67      21.67     0
+   32/32/32          4      4     0.1476    0.1476        29.10      29.11     0
+   32/32/32          8      4     0.2931    0.2930        29.30      29.32     0
+   64/64/32          1      4     0.1868    0.1868        22.99      22.99     0
+   64/64/32          2      4     0.3715    0.3714        23.12      23.13     0
+   64/64/32          4      4     0.5563    0.5561        30.88      30.89     0
+   64/64/32          8      4     1.1104    1.1101        30.94      30.95     0
+Measured tl.dot throughput (native execution unverified): 30.95 TFLOP/s (same configuration median 30.94 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/tensor_bf16.json

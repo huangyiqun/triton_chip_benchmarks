@@ -1,0 +1,15 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+FlagTree XPU INT8 requires a fully unrolled loop; using 512 iterations to bound compile time (override with --iterations)
+INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 512 iterations; 2 operations per update
+Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
+Loop is fully unrolled: the FlagTree XPU compiler cannot lower an scf.for carrying INT8 state, so every iteration is emitted inline
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+Timing: events via FlagGems kunlunxin device events
+          1   1024    n/a       1        n/a    0.56001        0.120      0.120
+          2   1024    n/a       1        n/a    1.11257        0.121      0.121
+Peak measured INT8 vector workload throughput: 0.121 TOPS (median 0.121 TOPS; blocks/unit=2, block=1024, unroll=1)
+This numeric result measures the typed INT8 source workload; it is not a verified native INT8 vector peak
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/vector_int8.json

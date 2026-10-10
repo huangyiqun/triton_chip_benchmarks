@@ -1,0 +1,630 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+FP32 vector: 8 independent MUL_ADD chains, 4096 iterations; 2 operations per update
+XPU source uses multiply plus add for FlagTree vectorization; hardware fusion and native SIMD instructions are unverified
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: events via FlagGems kunlunxin device events
+          1   1024    n/a       1        n/a    0.31197        1.721      1.722
+          1   1024    n/a       4        n/a    0.21144        2.539      2.542
+/workspace/triton_chip_benchmarks/bench_vector.py:60:15: error: 'triton_xpu.vvmulf' op requires the same type for all operands and results
+    return x * a + b
+              ^
+/workspace/triton_chip_benchmarks/bench_vector.py:159:50: note: called from
+                    x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                                                 ^
+module {
+  tt.func public @vector_fma_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %c4096_i32 = arith.constant 4096 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %c8_i32 = arith.constant 8 : i32
+    %c7_i32 = arith.constant 7 : i32
+    %c6_i32 = arith.constant 6 : i32
+    %c5_i32 = arith.constant 5 : i32
+    %c4_i32 = arith.constant 4 : i32
+    %c3_i32 = arith.constant 3 : i32
+    %c2_i32 = arith.constant 2 : i32
+    %c1_i32 = arith.constant 1 : i32
+    %cst = arith.constant dense<114688> : tensor<2048xi32>
+    %cst_0 = arith.constant dense<98304> : tensor<2048xi32>
+    %cst_1 = arith.constant dense<81920> : tensor<2048xi32>
+    %cst_2 = arith.constant dense<65536> : tensor<2048xi32>
+    %cst_3 = arith.constant dense<49152> : tensor<2048xi32>
+    %cst_4 = arith.constant dense<32768> : tensor<2048xi32>
+    %cst_5 = arith.constant dense<16384> : tensor<2048xi32>
+    %c2048_i64 = arith.constant 2048 : i64
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.muli %1, %c2048_i64 : i64
+    %3 = tt.make_range {end = 2048 : i32, start = 0 : i32} : tensor<2048xi32>
+    %4 = arith.extsi %3 : tensor<2048xi32> to tensor<2048xi64>
+    %5 = tt.splat %2 : i64 -> tensor<2048xi64>
+    %6 = arith.addi %5, %4 : tensor<2048xi64>
+    %7 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %8 = tt.addptr %7, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    %9 = tt.load %8 : tensor<2048x!tt.ptr<f32>>
+    %10 = tt.addptr %8, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %11 = tt.load %10 : tensor<2048x!tt.ptr<f32>>
+    %12 = tt.addptr %8, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %13 = tt.load %12 : tensor<2048x!tt.ptr<f32>>
+    %14 = tt.addptr %8, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %15 = tt.load %14 : tensor<2048x!tt.ptr<f32>>
+    %16 = tt.addptr %8, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %17 = tt.load %16 : tensor<2048x!tt.ptr<f32>>
+    %18 = tt.addptr %8, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %19 = tt.load %18 : tensor<2048x!tt.ptr<f32>>
+    %20 = tt.addptr %8, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %21 = tt.load %20 : tensor<2048x!tt.ptr<f32>>
+    %22 = tt.addptr %8, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %23 = tt.load %22 : tensor<2048x!tt.ptr<f32>>
+    %24 = tt.load %arg2 : !tt.ptr<f32>
+    %25 = tt.addptr %arg2, %c1_i32 : !tt.ptr<f32>, i32
+    %26 = tt.load %25 : !tt.ptr<f32>
+    %27 = tt.addptr %arg2, %c2_i32 : !tt.ptr<f32>, i32
+    %28 = tt.load %27 : !tt.ptr<f32>
+    %29 = tt.addptr %arg2, %c3_i32 : !tt.ptr<f32>, i32
+    %30 = tt.load %29 : !tt.ptr<f32>
+    %31 = tt.addptr %arg2, %c4_i32 : !tt.ptr<f32>, i32
+    %32 = tt.load %31 : !tt.ptr<f32>
+    %33 = tt.addptr %arg2, %c5_i32 : !tt.ptr<f32>, i32
+    %34 = tt.load %33 : !tt.ptr<f32>
+    %35 = tt.addptr %arg2, %c6_i32 : !tt.ptr<f32>, i32
+    %36 = tt.load %35 : !tt.ptr<f32>
+    %37 = tt.addptr %arg2, %c7_i32 : !tt.ptr<f32>, i32
+    %38 = tt.load %37 : !tt.ptr<f32>
+    %39 = tt.addptr %arg2, %c8_i32 : !tt.ptr<f32>, i32
+    %40 = tt.load %39 : !tt.ptr<f32>
+    %41 = tt.splat %24 : f32 -> tensor<2048xf32>
+    %42 = tt.splat %26 : f32 -> tensor<2048xf32>
+    %43 = tt.splat %28 : f32 -> tensor<2048xf32>
+    %44 = tt.splat %30 : f32 -> tensor<2048xf32>
+    %45 = tt.splat %32 : f32 -> tensor<2048xf32>
+    %46 = tt.splat %34 : f32 -> tensor<2048xf32>
+    %47 = tt.splat %36 : f32 -> tensor<2048xf32>
+    %48 = tt.splat %38 : f32 -> tensor<2048xf32>
+    %49 = tt.splat %40 : f32 -> tensor<2048xf32>
+    %50:8 = scf.for %arg3 = %c0_i32 to %c4096_i32 step %c1_i32 iter_args(%arg4 = %9, %arg5 = %11, %arg6 = %13, %arg7 = %15, %arg8 = %17, %arg9 = %19, %arg10 = %21, %arg11 = %23) -> (tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>)  : i32 {
+      %60 = arith.mulf %arg4, %41 : tensor<2048xf32>
+      %61 = arith.addf %60, %42 : tensor<2048xf32>
+      %62 = arith.mulf %arg5, %41 : tensor<2048xf32>
+      %63 = arith.addf %62, %43 : tensor<2048xf32>
+      %64 = arith.mulf %arg6, %41 : tensor<2048xf32>
+      %65 = arith.addf %64, %44 : tensor<2048xf32>
+      %66 = arith.mulf %arg7, %41 : tensor<2048xf32>
+      %67 = arith.addf %66, %45 : tensor<2048xf32>
+      %68 = arith.mulf %arg8, %41 : tensor<2048xf32>
+      %69 = arith.addf %68, %46 : tensor<2048xf32>
+      %70 = arith.mulf %arg9, %41 : tensor<2048xf32>
+      %71 = arith.addf %70, %47 : tensor<2048xf32>
+      %72 = arith.mulf %arg10, %41 : tensor<2048xf32>
+      %73 = arith.addf %72, %48 : tensor<2048xf32>
+      %74 = arith.mulf %arg11, %41 : tensor<2048xf32>
+      %75 = arith.addf %74, %49 : tensor<2048xf32>
+      scf.yield %61, %63, %65, %67, %69, %71, %73, %75 : tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>
+    } {tt.loop_unroll_factor = 1 : i32}
+    %51 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %52 = tt.addptr %51, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    tt.store %52, %50#0 : tensor<2048x!tt.ptr<f32>>
+    %53 = tt.addptr %52, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %53, %50#1 : tensor<2048x!tt.ptr<f32>>
+    %54 = tt.addptr %52, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %54, %50#2 : tensor<2048x!tt.ptr<f32>>
+    %55 = tt.addptr %52, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %55, %50#3 : tensor<2048x!tt.ptr<f32>>
+    %56 = tt.addptr %52, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %56, %50#4 : tensor<2048x!tt.ptr<f32>>
+    %57 = tt.addptr %52, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %57, %50#5 : tensor<2048x!tt.ptr<f32>>
+    %58 = tt.addptr %52, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %58, %50#6 : tensor<2048x!tt.ptr<f32>>
+    %59 = tt.addptr %52, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %59, %50#7 : tensor<2048x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(triton-loop-aware-cse, tritonxpu-legalize-extern-ew, convert-triton-to-triton-xpu{buffer_size=128 core_num=64 is-tle=false xpu_arch=3}, tritonxpu-print, tritonxpu-create-gm2lm{atomic-sim=true core0-act-only=false is-use-mask-zero=false xpu-arch=3}, tritonxpu-memory-cache{core-num=64 lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-dtype-convert{xpu-arch=3}, tritonxpu-vectorizability-analysis{pre-tiling=true reduce-vec=true}, tritonxpu-tile-decide{reduce-vec=true}, tritonxpu-core-tiling{core-num=64 dump-flag=false groups-per-cluster=1 lm-buflen=128 triton-auto-core-tiling=false}, cse, tritonxpu-scalar-analysis{aggressive=false}, tritonxpu-offset-analysis{dump-flag=false is-use-mask-zero=false lm-buflen=128}, tritonxpu-scalar-analysis{aggressive=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-legalize{core-num=64 groups-per-cluster=1 is-use-mask-zero=false lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-mask{core0-act-only=false is-use-mask-zero=false}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, cse, loop-invariant-code-motion, symbol-dce, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-normalize{compare-fusion=false dump-flag=false}, tritonxpu-vectorizability-analysis{pre-tiling=false reduce-vec=true}, tritonxpu-vectorize{compare-fusion=false dump-flag=false per-op-decision=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-alloca{core-num=64 lm-buflen=128}, tritonxpu-tile-analysis{vrf-budget=24}, tritonxpu-unroll-control{budget-tiling=true core-num=64 is-use-mask-zero=false lm-buflen=128 open-decision-entry=false pin-unroll-num=0 unroll-num=2 vrf-budget=24}, tritonxpu-store-control, tritonxpu-other-sim{core-num=64 lm-buflen=128}, tritonxpu-memory-inplace{core-num=64 lm-buflen=128}, tritonxpu-cf-to-scf, tritonxpu-loop-grid, cse, loop-invariant-code-motion, symbol-dce)",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: error: Failures have been detected while processing an MLIR pass pipeline
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 1, 'block_size': 2048, 'num_warps': None, 'unroll': 1}: out of resource: uni_sram PassManager::run failed: loc(callsite("/workspace/triton_chip_benchmarks/bench_vector.py":60:15 at "x0"("/workspace/triton_chip_benchmarks/bench_vector.py":159:50))): 'triton_xpu.vvmulf' op requires the same type for all operands and results
+loc("/workspace/triton_chip_benchmarks/bench_vector.py":90:0): Failures have been detected while processing an MLIR pass pipeline
+  note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`, Required: 0, Hardware limit: 0. Reducing block sizes or `num_stages` may help.
+/workspace/triton_chip_benchmarks/bench_vector.py:60:15: error: 'triton_xpu.vvmulf' op requires the same type for all operands and results
+    return x * a + b
+              ^
+/workspace/triton_chip_benchmarks/bench_vector.py:159:50: note: called from
+                    x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                                                 ^
+module {
+  tt.func public @vector_fma_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %c1024_i32 = arith.constant 1024 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %c8_i32 = arith.constant 8 : i32
+    %c7_i32 = arith.constant 7 : i32
+    %c6_i32 = arith.constant 6 : i32
+    %c5_i32 = arith.constant 5 : i32
+    %c4_i32 = arith.constant 4 : i32
+    %c3_i32 = arith.constant 3 : i32
+    %c2_i32 = arith.constant 2 : i32
+    %c1_i32 = arith.constant 1 : i32
+    %cst = arith.constant dense<114688> : tensor<2048xi32>
+    %cst_0 = arith.constant dense<98304> : tensor<2048xi32>
+    %cst_1 = arith.constant dense<81920> : tensor<2048xi32>
+    %cst_2 = arith.constant dense<65536> : tensor<2048xi32>
+    %cst_3 = arith.constant dense<49152> : tensor<2048xi32>
+    %cst_4 = arith.constant dense<32768> : tensor<2048xi32>
+    %cst_5 = arith.constant dense<16384> : tensor<2048xi32>
+    %c2048_i64 = arith.constant 2048 : i64
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.muli %1, %c2048_i64 : i64
+    %3 = tt.make_range {end = 2048 : i32, start = 0 : i32} : tensor<2048xi32>
+    %4 = arith.extsi %3 : tensor<2048xi32> to tensor<2048xi64>
+    %5 = tt.splat %2 : i64 -> tensor<2048xi64>
+    %6 = arith.addi %5, %4 : tensor<2048xi64>
+    %7 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %8 = tt.addptr %7, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    %9 = tt.load %8 : tensor<2048x!tt.ptr<f32>>
+    %10 = tt.addptr %8, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %11 = tt.load %10 : tensor<2048x!tt.ptr<f32>>
+    %12 = tt.addptr %8, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %13 = tt.load %12 : tensor<2048x!tt.ptr<f32>>
+    %14 = tt.addptr %8, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %15 = tt.load %14 : tensor<2048x!tt.ptr<f32>>
+    %16 = tt.addptr %8, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %17 = tt.load %16 : tensor<2048x!tt.ptr<f32>>
+    %18 = tt.addptr %8, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %19 = tt.load %18 : tensor<2048x!tt.ptr<f32>>
+    %20 = tt.addptr %8, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %21 = tt.load %20 : tensor<2048x!tt.ptr<f32>>
+    %22 = tt.addptr %8, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %23 = tt.load %22 : tensor<2048x!tt.ptr<f32>>
+    %24 = tt.load %arg2 : !tt.ptr<f32>
+    %25 = tt.addptr %arg2, %c1_i32 : !tt.ptr<f32>, i32
+    %26 = tt.load %25 : !tt.ptr<f32>
+    %27 = tt.addptr %arg2, %c2_i32 : !tt.ptr<f32>, i32
+    %28 = tt.load %27 : !tt.ptr<f32>
+    %29 = tt.addptr %arg2, %c3_i32 : !tt.ptr<f32>, i32
+    %30 = tt.load %29 : !tt.ptr<f32>
+    %31 = tt.addptr %arg2, %c4_i32 : !tt.ptr<f32>, i32
+    %32 = tt.load %31 : !tt.ptr<f32>
+    %33 = tt.addptr %arg2, %c5_i32 : !tt.ptr<f32>, i32
+    %34 = tt.load %33 : !tt.ptr<f32>
+    %35 = tt.addptr %arg2, %c6_i32 : !tt.ptr<f32>, i32
+    %36 = tt.load %35 : !tt.ptr<f32>
+    %37 = tt.addptr %arg2, %c7_i32 : !tt.ptr<f32>, i32
+    %38 = tt.load %37 : !tt.ptr<f32>
+    %39 = tt.addptr %arg2, %c8_i32 : !tt.ptr<f32>, i32
+    %40 = tt.load %39 : !tt.ptr<f32>
+    %41 = tt.splat %24 : f32 -> tensor<2048xf32>
+    %42 = tt.splat %26 : f32 -> tensor<2048xf32>
+    %43 = tt.splat %28 : f32 -> tensor<2048xf32>
+    %44 = tt.splat %30 : f32 -> tensor<2048xf32>
+    %45 = tt.splat %32 : f32 -> tensor<2048xf32>
+    %46 = tt.splat %34 : f32 -> tensor<2048xf32>
+    %47 = tt.splat %36 : f32 -> tensor<2048xf32>
+    %48 = tt.splat %38 : f32 -> tensor<2048xf32>
+    %49 = tt.splat %40 : f32 -> tensor<2048xf32>
+    %50:8 = scf.for %arg3 = %c0_i32 to %c1024_i32 step %c1_i32 iter_args(%arg4 = %9, %arg5 = %11, %arg6 = %13, %arg7 = %15, %arg8 = %17, %arg9 = %19, %arg10 = %21, %arg11 = %23) -> (tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>)  : i32 {
+      %60 = arith.mulf %arg4, %41 : tensor<2048xf32>
+      %61 = arith.addf %60, %42 : tensor<2048xf32>
+      %62 = arith.mulf %arg5, %41 : tensor<2048xf32>
+      %63 = arith.addf %62, %43 : tensor<2048xf32>
+      %64 = arith.mulf %arg6, %41 : tensor<2048xf32>
+      %65 = arith.addf %64, %44 : tensor<2048xf32>
+      %66 = arith.mulf %arg7, %41 : tensor<2048xf32>
+      %67 = arith.addf %66, %45 : tensor<2048xf32>
+      %68 = arith.mulf %arg8, %41 : tensor<2048xf32>
+      %69 = arith.addf %68, %46 : tensor<2048xf32>
+      %70 = arith.mulf %arg9, %41 : tensor<2048xf32>
+      %71 = arith.addf %70, %47 : tensor<2048xf32>
+      %72 = arith.mulf %arg10, %41 : tensor<2048xf32>
+      %73 = arith.addf %72, %48 : tensor<2048xf32>
+      %74 = arith.mulf %arg11, %41 : tensor<2048xf32>
+      %75 = arith.addf %74, %49 : tensor<2048xf32>
+      %76 = arith.mulf %61, %41 : tensor<2048xf32>
+      %77 = arith.addf %76, %42 : tensor<2048xf32>
+      %78 = arith.mulf %63, %41 : tensor<2048xf32>
+      %79 = arith.addf %78, %43 : tensor<2048xf32>
+      %80 = arith.mulf %65, %41 : tensor<2048xf32>
+      %81 = arith.addf %80, %44 : tensor<2048xf32>
+      %82 = arith.mulf %67, %41 : tensor<2048xf32>
+      %83 = arith.addf %82, %45 : tensor<2048xf32>
+      %84 = arith.mulf %69, %41 : tensor<2048xf32>
+      %85 = arith.addf %84, %46 : tensor<2048xf32>
+      %86 = arith.mulf %71, %41 : tensor<2048xf32>
+      %87 = arith.addf %86, %47 : tensor<2048xf32>
+      %88 = arith.mulf %73, %41 : tensor<2048xf32>
+      %89 = arith.addf %88, %48 : tensor<2048xf32>
+      %90 = arith.mulf %75, %41 : tensor<2048xf32>
+      %91 = arith.addf %90, %49 : tensor<2048xf32>
+      %92 = arith.mulf %77, %41 : tensor<2048xf32>
+      %93 = arith.addf %92, %42 : tensor<2048xf32>
+      %94 = arith.mulf %79, %41 : tensor<2048xf32>
+      %95 = arith.addf %94, %43 : tensor<2048xf32>
+      %96 = arith.mulf %81, %41 : tensor<2048xf32>
+      %97 = arith.addf %96, %44 : tensor<2048xf32>
+      %98 = arith.mulf %83, %41 : tensor<2048xf32>
+      %99 = arith.addf %98, %45 : tensor<2048xf32>
+      %100 = arith.mulf %85, %41 : tensor<2048xf32>
+      %101 = arith.addf %100, %46 : tensor<2048xf32>
+      %102 = arith.mulf %87, %41 : tensor<2048xf32>
+      %103 = arith.addf %102, %47 : tensor<2048xf32>
+      %104 = arith.mulf %89, %41 : tensor<2048xf32>
+      %105 = arith.addf %104, %48 : tensor<2048xf32>
+      %106 = arith.mulf %91, %41 : tensor<2048xf32>
+      %107 = arith.addf %106, %49 : tensor<2048xf32>
+      %108 = arith.mulf %93, %41 : tensor<2048xf32>
+      %109 = arith.addf %108, %42 : tensor<2048xf32>
+      %110 = arith.mulf %95, %41 : tensor<2048xf32>
+      %111 = arith.addf %110, %43 : tensor<2048xf32>
+      %112 = arith.mulf %97, %41 : tensor<2048xf32>
+      %113 = arith.addf %112, %44 : tensor<2048xf32>
+      %114 = arith.mulf %99, %41 : tensor<2048xf32>
+      %115 = arith.addf %114, %45 : tensor<2048xf32>
+      %116 = arith.mulf %101, %41 : tensor<2048xf32>
+      %117 = arith.addf %116, %46 : tensor<2048xf32>
+      %118 = arith.mulf %103, %41 : tensor<2048xf32>
+      %119 = arith.addf %118, %47 : tensor<2048xf32>
+      %120 = arith.mulf %105, %41 : tensor<2048xf32>
+      %121 = arith.addf %120, %48 : tensor<2048xf32>
+      %122 = arith.mulf %107, %41 : tensor<2048xf32>
+      %123 = arith.addf %122, %49 : tensor<2048xf32>
+      scf.yield %109, %111, %113, %115, %117, %119, %121, %123 : tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>
+    } {tt.loop_unroll_factor = 1 : i32}
+    %51 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %52 = tt.addptr %51, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    tt.store %52, %50#0 : tensor<2048x!tt.ptr<f32>>
+    %53 = tt.addptr %52, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %53, %50#1 : tensor<2048x!tt.ptr<f32>>
+    %54 = tt.addptr %52, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %54, %50#2 : tensor<2048x!tt.ptr<f32>>
+    %55 = tt.addptr %52, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %55, %50#3 : tensor<2048x!tt.ptr<f32>>
+    %56 = tt.addptr %52, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %56, %50#4 : tensor<2048x!tt.ptr<f32>>
+    %57 = tt.addptr %52, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %57, %50#5 : tensor<2048x!tt.ptr<f32>>
+    %58 = tt.addptr %52, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %58, %50#6 : tensor<2048x!tt.ptr<f32>>
+    %59 = tt.addptr %52, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %59, %50#7 : tensor<2048x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(triton-loop-aware-cse, tritonxpu-legalize-extern-ew, convert-triton-to-triton-xpu{buffer_size=128 core_num=64 is-tle=false xpu_arch=3}, tritonxpu-print, tritonxpu-create-gm2lm{atomic-sim=true core0-act-only=false is-use-mask-zero=false xpu-arch=3}, tritonxpu-memory-cache{core-num=64 lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-dtype-convert{xpu-arch=3}, tritonxpu-vectorizability-analysis{pre-tiling=true reduce-vec=true}, tritonxpu-tile-decide{reduce-vec=true}, tritonxpu-core-tiling{core-num=64 dump-flag=false groups-per-cluster=1 lm-buflen=128 triton-auto-core-tiling=false}, cse, tritonxpu-scalar-analysis{aggressive=false}, tritonxpu-offset-analysis{dump-flag=false is-use-mask-zero=false lm-buflen=128}, tritonxpu-scalar-analysis{aggressive=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-legalize{core-num=64 groups-per-cluster=1 is-use-mask-zero=false lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-mask{core0-act-only=false is-use-mask-zero=false}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, cse, loop-invariant-code-motion, symbol-dce, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-normalize{compare-fusion=false dump-flag=false}, tritonxpu-vectorizability-analysis{pre-tiling=false reduce-vec=true}, tritonxpu-vectorize{compare-fusion=false dump-flag=false per-op-decision=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-alloca{core-num=64 lm-buflen=128}, tritonxpu-tile-analysis{vrf-budget=24}, tritonxpu-unroll-control{budget-tiling=true core-num=64 is-use-mask-zero=false lm-buflen=128 open-decision-entry=false pin-unroll-num=0 unroll-num=2 vrf-budget=24}, tritonxpu-store-control, tritonxpu-other-sim{core-num=64 lm-buflen=128}, tritonxpu-memory-inplace{core-num=64 lm-buflen=128}, tritonxpu-cf-to-scf, tritonxpu-loop-grid, cse, loop-invariant-code-motion, symbol-dce)",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: error: Failures have been detected while processing an MLIR pass pipeline
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 1, 'block_size': 2048, 'num_warps': None, 'unroll': 4}: out of resource: uni_sram PassManager::run failed: loc(callsite("/workspace/triton_chip_benchmarks/bench_vector.py":60:15 at "x0"("/workspace/triton_chip_benchmarks/bench_vector.py":159:50))): 'triton_xpu.vvmulf' op requires the same type for all operands and results
+loc("/workspace/triton_chip_benchmarks/bench_vector.py":90:0): Failures have been detected while processing an MLIR pass pipeline
+  note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`, Required: 0, Hardware limit: 0. Reducing block sizes or `num_stages` may help.
+          2   1024    n/a       1        n/a    0.60844        1.765      1.773
+          2   1024    n/a       4        n/a    0.41532        2.585      2.589
+/workspace/triton_chip_benchmarks/bench_vector.py:60:15: error: 'triton_xpu.vvmulf' op requires the same type for all operands and results
+    return x * a + b
+              ^
+/workspace/triton_chip_benchmarks/bench_vector.py:159:50: note: called from
+                    x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                                                 ^
+module {
+  tt.func public @vector_fma_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %c4096_i32 = arith.constant 4096 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %c8_i32 = arith.constant 8 : i32
+    %c7_i32 = arith.constant 7 : i32
+    %c6_i32 = arith.constant 6 : i32
+    %c5_i32 = arith.constant 5 : i32
+    %c4_i32 = arith.constant 4 : i32
+    %c3_i32 = arith.constant 3 : i32
+    %c2_i32 = arith.constant 2 : i32
+    %c1_i32 = arith.constant 1 : i32
+    %cst = arith.constant dense<229376> : tensor<2048xi32>
+    %cst_0 = arith.constant dense<196608> : tensor<2048xi32>
+    %cst_1 = arith.constant dense<163840> : tensor<2048xi32>
+    %cst_2 = arith.constant dense<131072> : tensor<2048xi32>
+    %cst_3 = arith.constant dense<98304> : tensor<2048xi32>
+    %cst_4 = arith.constant dense<65536> : tensor<2048xi32>
+    %cst_5 = arith.constant dense<32768> : tensor<2048xi32>
+    %c2048_i64 = arith.constant 2048 : i64
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.muli %1, %c2048_i64 : i64
+    %3 = tt.make_range {end = 2048 : i32, start = 0 : i32} : tensor<2048xi32>
+    %4 = arith.extsi %3 : tensor<2048xi32> to tensor<2048xi64>
+    %5 = tt.splat %2 : i64 -> tensor<2048xi64>
+    %6 = arith.addi %5, %4 : tensor<2048xi64>
+    %7 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %8 = tt.addptr %7, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    %9 = tt.load %8 : tensor<2048x!tt.ptr<f32>>
+    %10 = tt.addptr %8, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %11 = tt.load %10 : tensor<2048x!tt.ptr<f32>>
+    %12 = tt.addptr %8, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %13 = tt.load %12 : tensor<2048x!tt.ptr<f32>>
+    %14 = tt.addptr %8, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %15 = tt.load %14 : tensor<2048x!tt.ptr<f32>>
+    %16 = tt.addptr %8, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %17 = tt.load %16 : tensor<2048x!tt.ptr<f32>>
+    %18 = tt.addptr %8, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %19 = tt.load %18 : tensor<2048x!tt.ptr<f32>>
+    %20 = tt.addptr %8, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %21 = tt.load %20 : tensor<2048x!tt.ptr<f32>>
+    %22 = tt.addptr %8, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %23 = tt.load %22 : tensor<2048x!tt.ptr<f32>>
+    %24 = tt.load %arg2 : !tt.ptr<f32>
+    %25 = tt.addptr %arg2, %c1_i32 : !tt.ptr<f32>, i32
+    %26 = tt.load %25 : !tt.ptr<f32>
+    %27 = tt.addptr %arg2, %c2_i32 : !tt.ptr<f32>, i32
+    %28 = tt.load %27 : !tt.ptr<f32>
+    %29 = tt.addptr %arg2, %c3_i32 : !tt.ptr<f32>, i32
+    %30 = tt.load %29 : !tt.ptr<f32>
+    %31 = tt.addptr %arg2, %c4_i32 : !tt.ptr<f32>, i32
+    %32 = tt.load %31 : !tt.ptr<f32>
+    %33 = tt.addptr %arg2, %c5_i32 : !tt.ptr<f32>, i32
+    %34 = tt.load %33 : !tt.ptr<f32>
+    %35 = tt.addptr %arg2, %c6_i32 : !tt.ptr<f32>, i32
+    %36 = tt.load %35 : !tt.ptr<f32>
+    %37 = tt.addptr %arg2, %c7_i32 : !tt.ptr<f32>, i32
+    %38 = tt.load %37 : !tt.ptr<f32>
+    %39 = tt.addptr %arg2, %c8_i32 : !tt.ptr<f32>, i32
+    %40 = tt.load %39 : !tt.ptr<f32>
+    %41 = tt.splat %24 : f32 -> tensor<2048xf32>
+    %42 = tt.splat %26 : f32 -> tensor<2048xf32>
+    %43 = tt.splat %28 : f32 -> tensor<2048xf32>
+    %44 = tt.splat %30 : f32 -> tensor<2048xf32>
+    %45 = tt.splat %32 : f32 -> tensor<2048xf32>
+    %46 = tt.splat %34 : f32 -> tensor<2048xf32>
+    %47 = tt.splat %36 : f32 -> tensor<2048xf32>
+    %48 = tt.splat %38 : f32 -> tensor<2048xf32>
+    %49 = tt.splat %40 : f32 -> tensor<2048xf32>
+    %50:8 = scf.for %arg3 = %c0_i32 to %c4096_i32 step %c1_i32 iter_args(%arg4 = %9, %arg5 = %11, %arg6 = %13, %arg7 = %15, %arg8 = %17, %arg9 = %19, %arg10 = %21, %arg11 = %23) -> (tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>)  : i32 {
+      %60 = arith.mulf %arg4, %41 : tensor<2048xf32>
+      %61 = arith.addf %60, %42 : tensor<2048xf32>
+      %62 = arith.mulf %arg5, %41 : tensor<2048xf32>
+      %63 = arith.addf %62, %43 : tensor<2048xf32>
+      %64 = arith.mulf %arg6, %41 : tensor<2048xf32>
+      %65 = arith.addf %64, %44 : tensor<2048xf32>
+      %66 = arith.mulf %arg7, %41 : tensor<2048xf32>
+      %67 = arith.addf %66, %45 : tensor<2048xf32>
+      %68 = arith.mulf %arg8, %41 : tensor<2048xf32>
+      %69 = arith.addf %68, %46 : tensor<2048xf32>
+      %70 = arith.mulf %arg9, %41 : tensor<2048xf32>
+      %71 = arith.addf %70, %47 : tensor<2048xf32>
+      %72 = arith.mulf %arg10, %41 : tensor<2048xf32>
+      %73 = arith.addf %72, %48 : tensor<2048xf32>
+      %74 = arith.mulf %arg11, %41 : tensor<2048xf32>
+      %75 = arith.addf %74, %49 : tensor<2048xf32>
+      scf.yield %61, %63, %65, %67, %69, %71, %73, %75 : tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>
+    } {tt.loop_unroll_factor = 1 : i32}
+    %51 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %52 = tt.addptr %51, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    tt.store %52, %50#0 : tensor<2048x!tt.ptr<f32>>
+    %53 = tt.addptr %52, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %53, %50#1 : tensor<2048x!tt.ptr<f32>>
+    %54 = tt.addptr %52, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %54, %50#2 : tensor<2048x!tt.ptr<f32>>
+    %55 = tt.addptr %52, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %55, %50#3 : tensor<2048x!tt.ptr<f32>>
+    %56 = tt.addptr %52, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %56, %50#4 : tensor<2048x!tt.ptr<f32>>
+    %57 = tt.addptr %52, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %57, %50#5 : tensor<2048x!tt.ptr<f32>>
+    %58 = tt.addptr %52, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %58, %50#6 : tensor<2048x!tt.ptr<f32>>
+    %59 = tt.addptr %52, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %59, %50#7 : tensor<2048x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(triton-loop-aware-cse, tritonxpu-legalize-extern-ew, convert-triton-to-triton-xpu{buffer_size=128 core_num=64 is-tle=false xpu_arch=3}, tritonxpu-print, tritonxpu-create-gm2lm{atomic-sim=true core0-act-only=false is-use-mask-zero=false xpu-arch=3}, tritonxpu-memory-cache{core-num=64 lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-dtype-convert{xpu-arch=3}, tritonxpu-vectorizability-analysis{pre-tiling=true reduce-vec=true}, tritonxpu-tile-decide{reduce-vec=true}, tritonxpu-core-tiling{core-num=64 dump-flag=false groups-per-cluster=1 lm-buflen=128 triton-auto-core-tiling=false}, cse, tritonxpu-scalar-analysis{aggressive=false}, tritonxpu-offset-analysis{dump-flag=false is-use-mask-zero=false lm-buflen=128}, tritonxpu-scalar-analysis{aggressive=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-legalize{core-num=64 groups-per-cluster=1 is-use-mask-zero=false lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-mask{core0-act-only=false is-use-mask-zero=false}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, cse, loop-invariant-code-motion, symbol-dce, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-normalize{compare-fusion=false dump-flag=false}, tritonxpu-vectorizability-analysis{pre-tiling=false reduce-vec=true}, tritonxpu-vectorize{compare-fusion=false dump-flag=false per-op-decision=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-alloca{core-num=64 lm-buflen=128}, tritonxpu-tile-analysis{vrf-budget=24}, tritonxpu-unroll-control{budget-tiling=true core-num=64 is-use-mask-zero=false lm-buflen=128 open-decision-entry=false pin-unroll-num=0 unroll-num=2 vrf-budget=24}, tritonxpu-store-control, tritonxpu-other-sim{core-num=64 lm-buflen=128}, tritonxpu-memory-inplace{core-num=64 lm-buflen=128}, tritonxpu-cf-to-scf, tritonxpu-loop-grid, cse, loop-invariant-code-motion, symbol-dce)",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: error: Failures have been detected while processing an MLIR pass pipeline
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 2, 'block_size': 2048, 'num_warps': None, 'unroll': 1}: out of resource: uni_sram PassManager::run failed: loc(callsite("/workspace/triton_chip_benchmarks/bench_vector.py":60:15 at "x0"("/workspace/triton_chip_benchmarks/bench_vector.py":159:50))): 'triton_xpu.vvmulf' op requires the same type for all operands and results
+loc("/workspace/triton_chip_benchmarks/bench_vector.py":90:0): Failures have been detected while processing an MLIR pass pipeline
+  note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`, Required: 0, Hardware limit: 0. Reducing block sizes or `num_stages` may help.
+/workspace/triton_chip_benchmarks/bench_vector.py:60:15: error: 'triton_xpu.vvmulf' op requires the same type for all operands and results
+    return x * a + b
+              ^
+/workspace/triton_chip_benchmarks/bench_vector.py:159:50: note: called from
+                    x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                                                 ^
+module {
+  tt.func public @vector_fma_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %c1024_i32 = arith.constant 1024 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %c8_i32 = arith.constant 8 : i32
+    %c7_i32 = arith.constant 7 : i32
+    %c6_i32 = arith.constant 6 : i32
+    %c5_i32 = arith.constant 5 : i32
+    %c4_i32 = arith.constant 4 : i32
+    %c3_i32 = arith.constant 3 : i32
+    %c2_i32 = arith.constant 2 : i32
+    %c1_i32 = arith.constant 1 : i32
+    %cst = arith.constant dense<229376> : tensor<2048xi32>
+    %cst_0 = arith.constant dense<196608> : tensor<2048xi32>
+    %cst_1 = arith.constant dense<163840> : tensor<2048xi32>
+    %cst_2 = arith.constant dense<131072> : tensor<2048xi32>
+    %cst_3 = arith.constant dense<98304> : tensor<2048xi32>
+    %cst_4 = arith.constant dense<65536> : tensor<2048xi32>
+    %cst_5 = arith.constant dense<32768> : tensor<2048xi32>
+    %c2048_i64 = arith.constant 2048 : i64
+    %0 = tt.get_program_id x : i32
+    %1 = arith.extsi %0 : i32 to i64
+    %2 = arith.muli %1, %c2048_i64 : i64
+    %3 = tt.make_range {end = 2048 : i32, start = 0 : i32} : tensor<2048xi32>
+    %4 = arith.extsi %3 : tensor<2048xi32> to tensor<2048xi64>
+    %5 = tt.splat %2 : i64 -> tensor<2048xi64>
+    %6 = arith.addi %5, %4 : tensor<2048xi64>
+    %7 = tt.splat %arg0 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %8 = tt.addptr %7, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    %9 = tt.load %8 : tensor<2048x!tt.ptr<f32>>
+    %10 = tt.addptr %8, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %11 = tt.load %10 : tensor<2048x!tt.ptr<f32>>
+    %12 = tt.addptr %8, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %13 = tt.load %12 : tensor<2048x!tt.ptr<f32>>
+    %14 = tt.addptr %8, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %15 = tt.load %14 : tensor<2048x!tt.ptr<f32>>
+    %16 = tt.addptr %8, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %17 = tt.load %16 : tensor<2048x!tt.ptr<f32>>
+    %18 = tt.addptr %8, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %19 = tt.load %18 : tensor<2048x!tt.ptr<f32>>
+    %20 = tt.addptr %8, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %21 = tt.load %20 : tensor<2048x!tt.ptr<f32>>
+    %22 = tt.addptr %8, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    %23 = tt.load %22 : tensor<2048x!tt.ptr<f32>>
+    %24 = tt.load %arg2 : !tt.ptr<f32>
+    %25 = tt.addptr %arg2, %c1_i32 : !tt.ptr<f32>, i32
+    %26 = tt.load %25 : !tt.ptr<f32>
+    %27 = tt.addptr %arg2, %c2_i32 : !tt.ptr<f32>, i32
+    %28 = tt.load %27 : !tt.ptr<f32>
+    %29 = tt.addptr %arg2, %c3_i32 : !tt.ptr<f32>, i32
+    %30 = tt.load %29 : !tt.ptr<f32>
+    %31 = tt.addptr %arg2, %c4_i32 : !tt.ptr<f32>, i32
+    %32 = tt.load %31 : !tt.ptr<f32>
+    %33 = tt.addptr %arg2, %c5_i32 : !tt.ptr<f32>, i32
+    %34 = tt.load %33 : !tt.ptr<f32>
+    %35 = tt.addptr %arg2, %c6_i32 : !tt.ptr<f32>, i32
+    %36 = tt.load %35 : !tt.ptr<f32>
+    %37 = tt.addptr %arg2, %c7_i32 : !tt.ptr<f32>, i32
+    %38 = tt.load %37 : !tt.ptr<f32>
+    %39 = tt.addptr %arg2, %c8_i32 : !tt.ptr<f32>, i32
+    %40 = tt.load %39 : !tt.ptr<f32>
+    %41 = tt.splat %24 : f32 -> tensor<2048xf32>
+    %42 = tt.splat %26 : f32 -> tensor<2048xf32>
+    %43 = tt.splat %28 : f32 -> tensor<2048xf32>
+    %44 = tt.splat %30 : f32 -> tensor<2048xf32>
+    %45 = tt.splat %32 : f32 -> tensor<2048xf32>
+    %46 = tt.splat %34 : f32 -> tensor<2048xf32>
+    %47 = tt.splat %36 : f32 -> tensor<2048xf32>
+    %48 = tt.splat %38 : f32 -> tensor<2048xf32>
+    %49 = tt.splat %40 : f32 -> tensor<2048xf32>
+    %50:8 = scf.for %arg3 = %c0_i32 to %c1024_i32 step %c1_i32 iter_args(%arg4 = %9, %arg5 = %11, %arg6 = %13, %arg7 = %15, %arg8 = %17, %arg9 = %19, %arg10 = %21, %arg11 = %23) -> (tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>)  : i32 {
+      %60 = arith.mulf %arg4, %41 : tensor<2048xf32>
+      %61 = arith.addf %60, %42 : tensor<2048xf32>
+      %62 = arith.mulf %arg5, %41 : tensor<2048xf32>
+      %63 = arith.addf %62, %43 : tensor<2048xf32>
+      %64 = arith.mulf %arg6, %41 : tensor<2048xf32>
+      %65 = arith.addf %64, %44 : tensor<2048xf32>
+      %66 = arith.mulf %arg7, %41 : tensor<2048xf32>
+      %67 = arith.addf %66, %45 : tensor<2048xf32>
+      %68 = arith.mulf %arg8, %41 : tensor<2048xf32>
+      %69 = arith.addf %68, %46 : tensor<2048xf32>
+      %70 = arith.mulf %arg9, %41 : tensor<2048xf32>
+      %71 = arith.addf %70, %47 : tensor<2048xf32>
+      %72 = arith.mulf %arg10, %41 : tensor<2048xf32>
+      %73 = arith.addf %72, %48 : tensor<2048xf32>
+      %74 = arith.mulf %arg11, %41 : tensor<2048xf32>
+      %75 = arith.addf %74, %49 : tensor<2048xf32>
+      %76 = arith.mulf %61, %41 : tensor<2048xf32>
+      %77 = arith.addf %76, %42 : tensor<2048xf32>
+      %78 = arith.mulf %63, %41 : tensor<2048xf32>
+      %79 = arith.addf %78, %43 : tensor<2048xf32>
+      %80 = arith.mulf %65, %41 : tensor<2048xf32>
+      %81 = arith.addf %80, %44 : tensor<2048xf32>
+      %82 = arith.mulf %67, %41 : tensor<2048xf32>
+      %83 = arith.addf %82, %45 : tensor<2048xf32>
+      %84 = arith.mulf %69, %41 : tensor<2048xf32>
+      %85 = arith.addf %84, %46 : tensor<2048xf32>
+      %86 = arith.mulf %71, %41 : tensor<2048xf32>
+      %87 = arith.addf %86, %47 : tensor<2048xf32>
+      %88 = arith.mulf %73, %41 : tensor<2048xf32>
+      %89 = arith.addf %88, %48 : tensor<2048xf32>
+      %90 = arith.mulf %75, %41 : tensor<2048xf32>
+      %91 = arith.addf %90, %49 : tensor<2048xf32>
+      %92 = arith.mulf %77, %41 : tensor<2048xf32>
+      %93 = arith.addf %92, %42 : tensor<2048xf32>
+      %94 = arith.mulf %79, %41 : tensor<2048xf32>
+      %95 = arith.addf %94, %43 : tensor<2048xf32>
+      %96 = arith.mulf %81, %41 : tensor<2048xf32>
+      %97 = arith.addf %96, %44 : tensor<2048xf32>
+      %98 = arith.mulf %83, %41 : tensor<2048xf32>
+      %99 = arith.addf %98, %45 : tensor<2048xf32>
+      %100 = arith.mulf %85, %41 : tensor<2048xf32>
+      %101 = arith.addf %100, %46 : tensor<2048xf32>
+      %102 = arith.mulf %87, %41 : tensor<2048xf32>
+      %103 = arith.addf %102, %47 : tensor<2048xf32>
+      %104 = arith.mulf %89, %41 : tensor<2048xf32>
+      %105 = arith.addf %104, %48 : tensor<2048xf32>
+      %106 = arith.mulf %91, %41 : tensor<2048xf32>
+      %107 = arith.addf %106, %49 : tensor<2048xf32>
+      %108 = arith.mulf %93, %41 : tensor<2048xf32>
+      %109 = arith.addf %108, %42 : tensor<2048xf32>
+      %110 = arith.mulf %95, %41 : tensor<2048xf32>
+      %111 = arith.addf %110, %43 : tensor<2048xf32>
+      %112 = arith.mulf %97, %41 : tensor<2048xf32>
+      %113 = arith.addf %112, %44 : tensor<2048xf32>
+      %114 = arith.mulf %99, %41 : tensor<2048xf32>
+      %115 = arith.addf %114, %45 : tensor<2048xf32>
+      %116 = arith.mulf %101, %41 : tensor<2048xf32>
+      %117 = arith.addf %116, %46 : tensor<2048xf32>
+      %118 = arith.mulf %103, %41 : tensor<2048xf32>
+      %119 = arith.addf %118, %47 : tensor<2048xf32>
+      %120 = arith.mulf %105, %41 : tensor<2048xf32>
+      %121 = arith.addf %120, %48 : tensor<2048xf32>
+      %122 = arith.mulf %107, %41 : tensor<2048xf32>
+      %123 = arith.addf %122, %49 : tensor<2048xf32>
+      scf.yield %109, %111, %113, %115, %117, %119, %121, %123 : tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>, tensor<2048xf32>
+    } {tt.loop_unroll_factor = 1 : i32}
+    %51 = tt.splat %arg1 : !tt.ptr<f32> -> tensor<2048x!tt.ptr<f32>>
+    %52 = tt.addptr %51, %6 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi64>
+    tt.store %52, %50#0 : tensor<2048x!tt.ptr<f32>>
+    %53 = tt.addptr %52, %cst_5 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %53, %50#1 : tensor<2048x!tt.ptr<f32>>
+    %54 = tt.addptr %52, %cst_4 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %54, %50#2 : tensor<2048x!tt.ptr<f32>>
+    %55 = tt.addptr %52, %cst_3 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %55, %50#3 : tensor<2048x!tt.ptr<f32>>
+    %56 = tt.addptr %52, %cst_2 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %56, %50#4 : tensor<2048x!tt.ptr<f32>>
+    %57 = tt.addptr %52, %cst_1 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %57, %50#5 : tensor<2048x!tt.ptr<f32>>
+    %58 = tt.addptr %52, %cst_0 : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %58, %50#6 : tensor<2048x!tt.ptr<f32>>
+    %59 = tt.addptr %52, %cst : tensor<2048x!tt.ptr<f32>>, tensor<2048xi32>
+    tt.store %59, %50#7 : tensor<2048x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(triton-loop-aware-cse, tritonxpu-legalize-extern-ew, convert-triton-to-triton-xpu{buffer_size=128 core_num=64 is-tle=false xpu_arch=3}, tritonxpu-print, tritonxpu-create-gm2lm{atomic-sim=true core0-act-only=false is-use-mask-zero=false xpu-arch=3}, tritonxpu-memory-cache{core-num=64 lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-dtype-convert{xpu-arch=3}, tritonxpu-vectorizability-analysis{pre-tiling=true reduce-vec=true}, tritonxpu-tile-decide{reduce-vec=true}, tritonxpu-core-tiling{core-num=64 dump-flag=false groups-per-cluster=1 lm-buflen=128 triton-auto-core-tiling=false}, cse, tritonxpu-scalar-analysis{aggressive=false}, tritonxpu-offset-analysis{dump-flag=false is-use-mask-zero=false lm-buflen=128}, tritonxpu-scalar-analysis{aggressive=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-legalize{core-num=64 groups-per-cluster=1 is-use-mask-zero=false lm-buflen=128}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-mask{core0-act-only=false is-use-mask-zero=false}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, cse, loop-invariant-code-motion, symbol-dce, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-normalize{compare-fusion=false dump-flag=false}, tritonxpu-vectorizability-analysis{pre-tiling=false reduce-vec=true}, tritonxpu-vectorize{compare-fusion=false dump-flag=false per-op-decision=true}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, tritonxpu-alloca{core-num=64 lm-buflen=128}, tritonxpu-tile-analysis{vrf-budget=24}, tritonxpu-unroll-control{budget-tiling=true core-num=64 is-use-mask-zero=false lm-buflen=128 open-decision-entry=false pin-unroll-num=0 unroll-num=2 vrf-budget=24}, tritonxpu-store-control, tritonxpu-other-sim{core-num=64 lm-buflen=128}, tritonxpu-memory-inplace{core-num=64 lm-buflen=128}, tritonxpu-cf-to-scf, tritonxpu-loop-grid, cse, loop-invariant-code-motion, symbol-dce)",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: error: Failures have been detected while processing an MLIR pass pipeline
+/workspace/triton_chip_benchmarks/bench_vector.py:90:0: note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 2, 'block_size': 2048, 'num_warps': None, 'unroll': 4}: out of resource: uni_sram PassManager::run failed: loc(callsite("/workspace/triton_chip_benchmarks/bench_vector.py":60:15 at "x0"("/workspace/triton_chip_benchmarks/bench_vector.py":159:50))): 'triton_xpu.vvmulf' op requires the same type for all operands and results
+loc("/workspace/triton_chip_benchmarks/bench_vector.py":90:0): Failures have been detected while processing an MLIR pass pipeline
+  note: Pipeline failed while executing [`TritonXPUUnrollControl` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`, Required: 0, Hardware limit: 0. Reducing block sizes or `num_stages` may help.
+Peak measured FP32 vector workload throughput: 2.589 TFLOP/s (median 2.585 TFLOP/s; blocks/unit=2, block=1024, unroll=4)
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/vector_fp32.json

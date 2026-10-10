@@ -7,7 +7,9 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import statistics
+import subprocess
 
 import torch
 import triton
@@ -170,6 +172,45 @@ def _compute_units(sources):
     return None, "unavailable; use --compute-units for compute benchmarks"
 
 
+def is_flagtree_xpu(metadata):
+    """Recognize a FlagTree XPU target from device metadata.
+
+    FlagTree's XPU driver reports ``GPUTarget(backend='cuda')``, the same
+    backend string NVIDIA uses, so the backend name alone cannot select the
+    XPU code paths. ``vendor_name`` is the field that separates them.
+    """
+    return (metadata.get("vendor_name") == "kunlunxin"
+            or metadata.get("backend") == "xpu")
+
+
+def _parse_xpu_l3_bytes(text):
+    """Read ``<l3_usage><total>`` from xpu-smi XML output, in bytes."""
+    match = re.search(r"<l3_usage>.*?<total>\s*([0-9.]+)\s*([KMG])i?B\s*</total>",
+                      text, re.DOTALL | re.IGNORECASE)
+    if not match:
+        return 0
+    scale = {"K": 2**10, "M": 2**20, "G": 2**30}[match.group(2).upper()]
+    return int(float(match.group(1)) * scale)
+
+
+def _xpu_l3_cache_bytes(device_index):
+    """Query the XPU's L3 capacity, which the Triton/torch properties report as 0.
+
+    Bandwidth peak eligibility needs a known last-level cache size. A failed
+    or unparsable query returns 0, leaving the capacity genuinely unknown
+    rather than guessed.
+    """
+    try:
+        completed = subprocess.run(
+            ["xpu-smi", "-q", "-x", "-i", str(device_index)],
+            capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if completed.returncode:
+        return 0
+    return _parse_xpu_l3_bytes(completed.stdout)
+
+
 def setup_device(args):
     gems = get_flag_gems()
     api = get_device_api()
@@ -200,8 +241,16 @@ def setup_device(args):
     if getattr(args, "compute_units", None) is not None:
         units, unit_source = args.compute_units, "--compute-units"
     l2 = _first_property(sources, "L2_cache_size", "l2_cache_size", "l2_cache_bytes") or 0
+    l2_source = "device properties" if l2 else "unavailable"
+    # The XPU runtime reports 0 here; its last-level cache is the L3, which
+    # only xpu-smi exposes. Bandwidth peak eligibility needs this capacity.
+    if not l2 and gems.vendor_name == "kunlunxin":
+        l2 = _xpu_l3_cache_bytes(args.device)
+        if l2:
+            l2_source = "xpu-smi L3 capacity"
     if getattr(args, "l2_mib", None) is not None:
         l2 = int(args.l2_mib * 2**20)
+        l2_source = "--l2-mib"
     total = _first_property(sources, "total_memory", "total_memory_bytes",
                             "totalGlobalMem")
     if not total:
@@ -223,6 +272,7 @@ def setup_device(args):
         "total_memory_bytes": int(total) if total else None,
         "memory_capacity_gib": float(total) / 2**30 if total else None,
         "l2_cache_bytes": int(l2),
+        "l2_cache_source": l2_source,
         # An absent capability query is unknown, not proof that FP64 is absent.
         # The benchmark can still try the backend and classify an explicit
         # compiler or runtime rejection after that attempt.

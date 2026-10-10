@@ -5,6 +5,11 @@ import os
 
 # Enable the KunlunXin KL3 event backend before accelerator packages are loaded.
 os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+# Without this, the FlagTree XPU compiler leaves lanes masked off by a
+# predicated tl.load holding uninitialized memory instead of `other`, so any
+# block larger than 8192 elements reduces a masked tail to garbage. Only the
+# XPU compiler reads this variable; other backends ignore it.
+os.environ.setdefault("TRITONXPU_IS_USE_MASK_ZERO", "1")
 
 import argparse
 import math
@@ -14,7 +19,8 @@ import triton
 import triton.language as tl
 
 from common import (add_common_arguments, available_memory_bytes, emit_results, emit_unsupported,
-                    get_device, measure, positive_int, reference_device, setup_device)
+                    get_device, is_flagtree_xpu, measure, positive_int, reference_device,
+                    setup_device)
 
 
 @triton.jit
@@ -53,9 +59,7 @@ def launch_read(src, sink, block_size, num_warps, vendor_name):
 
 def configure_launches(args, metadata):
     """XPU programs have no warps; run each block size once on that backend."""
-    is_xpu = metadata.get("backend") == "xpu" or (
-        metadata.get("backend") == "unknown" and metadata.get("vendor_name") == "kunlunxin")
-    if is_xpu:
+    if is_flagtree_xpu(metadata):
         if args.num_warps is not None and not args.quick:
             print("FlagTree XPU does not use Triton num_warps; ignoring --num-warps")
         args.num_warps = [None]

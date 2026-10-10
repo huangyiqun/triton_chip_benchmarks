@@ -1,0 +1,38 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+Validation: masked tails passed; every measured output is checked in full.
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. GB/s and TB/s use decimal units; peak uses the shortest timed sample.
+mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s
+Note: 256 MiB per buffer excluded from the HBM-sized peak summary: buffer is smaller than 4x L2.
+Timing: events via FlagGems kunlunxin device events
+copy         256    1024    n/a    3.801774    3.803813      141.22       141.14
+read         256    1024    n/a    6.816982    6.821620       39.42        39.39
+copy         256    4096    n/a    1.238333    1.238569      433.54       433.46
+read         256    4096    n/a    2.841075    3.101589       94.51        86.57
+copy         256   16384    n/a    0.809767    0.810249      662.99       662.60
+read         256   16384    n/a    1.553964    1.554875      172.75       172.65
+copy         512    1024    n/a    7.584014    7.588495      141.58       141.50
+read         512    1024    n/a   13.620751   13.628501       39.45        39.43
+copy         512    4096    n/a    2.472085    2.472957      434.35       434.19
+read         512    4096    n/a    5.410042    5.755921       99.26        93.30
+copy         512   16384    n/a    1.612485    1.612757      665.89       665.78
+read         512   16384    n/a    3.102823    3.104491      173.04       172.94
+copy        1024    1024    n/a   15.170552   15.178251      141.56       141.48
+read        1024    1024    n/a   27.199137   27.204140       39.52        39.51
+copy        1024    4096    n/a    4.938881    4.940973      434.81       434.63
+read        1024    4096    n/a    9.429260   10.416102      113.90       103.11
+copy        1024   16384    n/a    3.216758    3.218881      667.59       667.15
+read        1024   16384    n/a    6.202910    6.206173      173.11       173.02
+copy        2048    1024    n/a   30.307480   30.318250      141.71       141.66
+read        2048    1024    n/a   54.340820   54.350851       39.56        39.55
+copy        2048    4096    n/a    9.869381    9.873638      435.18       434.99
+read        2048    4096    n/a   17.631708   18.765329      121.83       114.47
+copy        2048   16384    n/a    6.434729    6.437392      667.47       667.19
+read        2048   16384    n/a   12.142363   12.416020      176.87       172.97
+Best measured copy bandwidth: 667.59 GB/s (0.668 TB/s), 1024 MiB/buffer, block=16384, warps=None.
+Best measured read bandwidth: 176.87 GB/s (0.177 TB/s), 2048 MiB/buffer, block=16384, warps=None.
+Highest measured HBM-sized pattern: copy, 0.668 TB/s (best observed timing, not a theoretical limit).
+These are effective bytes requested by the kernels; read includes a block reduction. Physical DRAM traffic and other access patterns can differ.
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/memory_bandwidth.json

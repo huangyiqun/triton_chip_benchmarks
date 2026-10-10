@@ -16,11 +16,24 @@ import triton.language as tl
 from triton.compiler.errors import CompilationError
 
 from common import (add_common_arguments, available_memory_bytes, emit_not_implemented,
-                    emit_results, emit_unsupported, get_device, measure, positive_int,
-                    reference_device, setup_device)
+                    emit_results, emit_unsupported, get_device, is_flagtree_xpu, measure,
+                    positive_int, reference_device, setup_device)
 
 
 CHAINS = 8
+DEFAULT_ITERATIONS = 4096
+
+# Types whose loop-carried state is narrower than 32 bits. The FlagTree XPU
+# compiler cannot lower an scf.for that carries them, so these run fully
+# unrolled; see FULLY_STATIC in vector_fma_kernel.
+XPU_NARROW_DTYPES = ("fp16", "bf16", "int8")
+
+# A fully unrolled body makes compile time grow with the iteration count: at
+# the 4096 default, FP16 takes ~101 s and INT8 ~230 s per configuration on a
+# P800, which exceeds the suite's per-metric timeout once a sweep compiles
+# several. 512 keeps compiles near 6 s and still measures a steady-state rate
+# within ~15% of the longer run.
+XPU_STATIC_ITERATIONS = 512
 DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
           "int8": torch.int8, "fp64": torch.float64,
           "fp8": getattr(torch, "float8_e4m3fn", None)}
@@ -64,10 +77,21 @@ def _int8_mul_add_update(x, a, b):
 
 
 @triton.jit
+def _chain_step(x, a, b, IS_INT8: tl.constexpr, USE_DP4A: tl.constexpr,
+                USE_EXPLICIT_FMA: tl.constexpr):
+    if IS_INT8 and USE_DP4A:
+        return _dp4a_update(x, a, b)
+    if IS_INT8:
+        return _int8_mul_add_update(x, a, b)
+    return _float_update(x, a, b, USE_EXPLICIT_FMA)
+
+
+@triton.jit
 def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                       ITERATIONS: tl.constexpr, BLOCK_SIZE: tl.constexpr,
                       UNROLL: tl.constexpr, USE_EXPLICIT_FMA: tl.constexpr,
-                      IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False):
+                      IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False,
+                      FULLY_STATIC: tl.constexpr = False):
     offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     # Runtime input loads keep all lanes and chains independent. Repeating a
     # formula every warp/program could let the compiler merge equal chains.
@@ -89,41 +113,57 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
     b6 = tl.load(Coefficients + 7)
     b7 = tl.load(Coefficients + 8)
 
-    # Explicitly unroll a small group of iterations to amortize loop control.
-    # The CLI requires exact divisibility, so each lane still executes exactly
-    # ITERATIONS * 8 updates. Independent chains hide dependency latency.
-    for _ in tl.range(0, ITERATIONS // UNROLL, loop_unroll_factor=1):
-        # The inner index keeps a distinct name: reusing the outer loop's name
-        # rebinds its loop-carried value to a constexpr, which some frontends
-        # reject when they check loop-carried types.
-        for _unrolled in tl.static_range(UNROLL):
-            if IS_INT8 and USE_DP4A:
-                x0 = _dp4a_update(x0, a, b0)
-                x1 = _dp4a_update(x1, a, b1)
-                x2 = _dp4a_update(x2, a, b2)
-                x3 = _dp4a_update(x3, a, b3)
-                x4 = _dp4a_update(x4, a, b4)
-                x5 = _dp4a_update(x5, a, b5)
-                x6 = _dp4a_update(x6, a, b6)
-                x7 = _dp4a_update(x7, a, b7)
-            elif IS_INT8:
-                x0 = _int8_mul_add_update(x0, a, b0)
-                x1 = _int8_mul_add_update(x1, a, b1)
-                x2 = _int8_mul_add_update(x2, a, b2)
-                x3 = _int8_mul_add_update(x3, a, b3)
-                x4 = _int8_mul_add_update(x4, a, b4)
-                x5 = _int8_mul_add_update(x5, a, b5)
-                x6 = _int8_mul_add_update(x6, a, b6)
-                x7 = _int8_mul_add_update(x7, a, b7)
-            else:
-                x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
-                x1 = _float_update(x1, a, b1, USE_EXPLICIT_FMA)
-                x2 = _float_update(x2, a, b2, USE_EXPLICIT_FMA)
-                x3 = _float_update(x3, a, b3, USE_EXPLICIT_FMA)
-                x4 = _float_update(x4, a, b4, USE_EXPLICIT_FMA)
-                x5 = _float_update(x5, a, b5, USE_EXPLICIT_FMA)
-                x6 = _float_update(x6, a, b6, USE_EXPLICIT_FMA)
-                x7 = _float_update(x7, a, b7, USE_EXPLICIT_FMA)
+    if FULLY_STATIC:
+        # No scf.for at all. The FlagTree XPU compiler fails to lower a loop
+        # that carries sub-32-bit values across iterations (f16/bf16/i8 hit
+        # arith.mulf/arith.muli/scf.for type mismatches), so the only form it
+        # accepts for those types is a fully unrolled body. Code size grows
+        # with ITERATIONS, which is why the caller lowers the iteration count.
+        for _static in tl.static_range(ITERATIONS):
+            x0 = _chain_step(x0, a, b0, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x1 = _chain_step(x1, a, b1, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x2 = _chain_step(x2, a, b2, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x3 = _chain_step(x3, a, b3, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x4 = _chain_step(x4, a, b4, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x5 = _chain_step(x5, a, b5, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x6 = _chain_step(x6, a, b6, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x7 = _chain_step(x7, a, b7, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+    else:
+        # Explicitly unroll a small group of iterations to amortize loop control.
+        # The CLI requires exact divisibility, so each lane still executes exactly
+        # ITERATIONS * 8 updates. Independent chains hide dependency latency.
+        for _ in tl.range(0, ITERATIONS // UNROLL, loop_unroll_factor=1):
+            # The inner index keeps a distinct name: reusing the outer loop's name
+            # rebinds its loop-carried value to a constexpr, which some frontends
+            # reject when they check loop-carried types.
+            for _unrolled in tl.static_range(UNROLL):
+                if IS_INT8 and USE_DP4A:
+                    x0 = _dp4a_update(x0, a, b0)
+                    x1 = _dp4a_update(x1, a, b1)
+                    x2 = _dp4a_update(x2, a, b2)
+                    x3 = _dp4a_update(x3, a, b3)
+                    x4 = _dp4a_update(x4, a, b4)
+                    x5 = _dp4a_update(x5, a, b5)
+                    x6 = _dp4a_update(x6, a, b6)
+                    x7 = _dp4a_update(x7, a, b7)
+                elif IS_INT8:
+                    x0 = _int8_mul_add_update(x0, a, b0)
+                    x1 = _int8_mul_add_update(x1, a, b1)
+                    x2 = _int8_mul_add_update(x2, a, b2)
+                    x3 = _int8_mul_add_update(x3, a, b3)
+                    x4 = _int8_mul_add_update(x4, a, b4)
+                    x5 = _int8_mul_add_update(x5, a, b5)
+                    x6 = _int8_mul_add_update(x6, a, b6)
+                    x7 = _int8_mul_add_update(x7, a, b7)
+                else:
+                    x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
+                    x1 = _float_update(x1, a, b1, USE_EXPLICIT_FMA)
+                    x2 = _float_update(x2, a, b2, USE_EXPLICIT_FMA)
+                    x3 = _float_update(x3, a, b3, USE_EXPLICIT_FMA)
+                    x4 = _float_update(x4, a, b4, USE_EXPLICIT_FMA)
+                    x5 = _float_update(x5, a, b5, USE_EXPLICIT_FMA)
+                    x6 = _float_update(x6, a, b6, USE_EXPLICIT_FMA)
+                    x7 = _float_update(x7, a, b7, USE_EXPLICIT_FMA)
 
     # Every accumulator is observable, preventing dead-chain elimination.
     tl.store(Output + offsets + 0 * ELEMENTS, x0)
@@ -369,8 +409,10 @@ def build_parser():
     add_common_arguments(parser)
     parser.add_argument("--dtype", choices=tuple(DTYPES), default="fp32",
                         help="Arithmetic type (default: fp32); unsupported types emit a status JSON")
-    parser.add_argument("--iterations", type=positive_int, default=4096,
-                        help="Multiply-add iterations per accumulator (default: 4096)")
+    parser.add_argument("--iterations", type=positive_int, default=DEFAULT_ITERATIONS,
+                        help=f"Multiply-add iterations per accumulator "
+                             f"(default: {DEFAULT_ITERATIONS}; "
+                             f"{XPU_STATIC_ITERATIONS} for FP16/BF16/INT8 on FlagTree XPU)")
     parser.add_argument("--blocks-per-sm", type=positive_int, nargs="+",
                         help="Grid multipliers per compute unit (XPU default: 1 2; "
                              "other backends: 8 16)")
@@ -387,27 +429,35 @@ def build_parser():
     return parser
 
 
-def _is_flagtree_xpu(metadata):
-    backend = metadata.get("backend")
-    return backend == "xpu" or (backend == "unknown"
-                                and metadata.get("vendor_name") == "kunlunxin")
+_is_flagtree_xpu = is_flagtree_xpu
+
+
+def needs_fully_static_loop(dtype, is_xpu):
+    return bool(is_xpu) and dtype in XPU_NARROW_DTYPES
 
 
 def configure_sweep(args, metadata):
     """Fill only unspecified tuning dimensions with backend-appropriate values."""
-    is_xpu = _is_flagtree_xpu(metadata)
-    # A 512-bit INT8 vector has 64 lanes; the XPU layout distributes a tile
-    # across 64 cores. At least 4096 elements provide one full vector per core.
-    xpu_int8 = is_xpu and args.dtype == "int8"
+    is_xpu = is_flagtree_xpu(metadata)
+    fully_static = needs_fully_static_loop(args.dtype, is_xpu)
     if args.quick:
         args.iterations = 32
         args.blocks_per_sm = [1]
-        args.block_sizes = [4096 if xpu_int8 else 1024] if is_xpu else [128]
+        args.block_sizes = [1024] if is_xpu else [128]
         args.num_warps = [None] if is_xpu else [4]
         args.unroll = [1]
     else:
+        if fully_static and args.iterations == DEFAULT_ITERATIONS:
+            args.iterations = XPU_STATIC_ITERATIONS
+            print(f"FlagTree XPU {args.dtype.upper()} requires a fully unrolled loop; "
+                  f"using {args.iterations} iterations to bound compile time "
+                  f"(override with --iterations)")
         args.blocks_per_sm = args.blocks_per_sm or ([1, 2] if is_xpu else [8, 16])
-        xpu_blocks = [4096, 8192] if xpu_int8 else [1024, 2048]
+        # 2048 elements per program is unusable for two XPU types: INT8 fails
+        # instruction selection for the 64-lane vector add, and BF16 silently
+        # miscompiles into non-finite results that output validation rejects.
+        # 1024 is exact for both.
+        xpu_blocks = [1024] if args.dtype in ("int8", "bf16") else [1024, 2048]
         args.block_sizes = args.block_sizes or (xpu_blocks if is_xpu else [256, 512])
         if is_xpu:
             if args.num_warps is not None:
@@ -415,16 +465,23 @@ def configure_sweep(args, metadata):
             args.num_warps = [None]
         else:
             args.num_warps = args.num_warps or [4, 8]
-        args.unroll = args.unroll or ([1, 4] if is_xpu else [1, 4, 8])
+        # A fully unrolled loop has no strip-mining factor to vary; every
+        # unroll value would compile the identical kernel.
+        if fully_static:
+            args.unroll = [1]
+        else:
+            args.unroll = args.unroll or ([1, 4] if is_xpu else [1, 4, 8])
     return is_xpu
 
 
 def launch_vector(kernel, grid, inputs, output, coefficients, elements, iterations,
                   block_size, unroll, use_explicit_fma, num_warps,
-                  is_int8=False, use_dp4a=False):
+                  is_int8=False, use_dp4a=False, fully_static=False):
     launch_options = {} if num_warps is None else {"num_warps": num_warps}
     if is_int8:
         launch_options.update(IS_INT8=True, USE_DP4A=use_dp4a)
+    if fully_static:
+        launch_options.update(FULLY_STATIC=True)
     return kernel[grid](
         inputs, output, coefficients, elements, iterations, block_size, unroll,
         use_explicit_fma, **launch_options,
@@ -534,6 +591,7 @@ def run_benchmark(args, metadata, is_xpu):
     # cannot be audited, keep the numeric result but mark it unverified.
     int8_mul_add = is_int8 and not use_dp4a
     use_explicit_fma = not is_xpu and not is_int8
+    fully_static = needs_fully_static_loop(args.dtype, is_xpu)
     source_operation = ("INT8_MUL_ADD_MOD256" if int8_mul_add else "DP4A") if is_int8 else (
         "FMA" if use_explicit_fma else "MUL_ADD")
     median_key, peak_key = ("tops", "peak_tops") if is_int8 else ("tflops", "peak_tflops")
@@ -549,6 +607,9 @@ def run_benchmark(args, metadata, is_xpu):
     elif is_xpu:
         print("XPU source uses multiply plus add for FlagTree vectorization; "
               "hardware fusion and native SIMD instructions are unverified")
+    if fully_static:
+        print(f"Loop is fully unrolled: the FlagTree XPU compiler cannot lower an scf.for "
+              f"carrying {args.dtype.upper()} state, so every iteration is emitted inline")
     if args.quick:
         print("QUICK smoke mode: throughput is not a representative performance result")
     print(f"blocks/unit  block  warps  unroll  registers  median_ms  median_{unit}  peak_{unit}")
@@ -587,6 +648,7 @@ def run_benchmark(args, metadata, is_xpu):
                             vector_fma_kernel, (blocks,), inputs, output, coefficients,
                             elements, iterations, block_size, unroll_value,
                             use_explicit_fma, num_warps, is_int8, use_dp4a,
+                            fully_static,
                         )
 
                     try:
@@ -649,6 +711,7 @@ def run_benchmark(args, metadata, is_xpu):
                         "arithmetic_dtype": arithmetic_dtype,
                         "includes_unpacking": False,
                         "operation": source_operation,
+                        "loop_structure": "fully_static" if fully_static else "strip_mined",
                         "hardware_fusion_verified": bool(use_explicit_fma
                                                          and assembly["native_arithmetic_verified"]),
                         "accumulator_chains": CHAINS,

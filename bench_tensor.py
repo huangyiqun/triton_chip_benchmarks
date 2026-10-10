@@ -28,12 +28,12 @@ from triton.compiler.errors import CompilationError
 try:
     from .common import (
         add_common_arguments, available_memory_bytes, emit_results, emit_unsupported,
-        full_precision_matmul, get_device, measure, setup_device,
+        full_precision_matmul, get_device, is_flagtree_xpu, measure, setup_device,
     )
 except ImportError:
     from common import (
         add_common_arguments, available_memory_bytes, emit_results, emit_unsupported,
-        full_precision_matmul, get_device, measure, setup_device,
+        full_precision_matmul, get_device, is_flagtree_xpu, measure, setup_device,
     )
 
 
@@ -123,6 +123,18 @@ def _emit_tensor_results(metadata: dict, args, rows: list[dict]) -> None:
         raise RuntimeError(reason)
     else:
         emit_results("tensor", metadata, args, rows)
+
+
+@triton.jit
+def _int8_dot_probe_kernel(A, B, C, M: tl.constexpr, N: tl.constexpr, K: tl.constexpr):
+    """One INT8 tl.dot, used only to detect whether the backend supports it."""
+    rows = tl.arange(0, M)
+    cols = tl.arange(0, N)
+    inner = tl.arange(0, K)
+    a = tl.load(A + rows[:, None] * K + inner[None, :])
+    b = tl.load(B + inner[:, None] * N + cols[None, :])
+    accumulator = tl.dot(a, b, tl.full((M, N), 0, tl.int32), out_dtype=tl.int32)
+    tl.store(C + rows[:, None] * N + cols[None, :], accumulator)
 
 
 @triton.jit
@@ -753,6 +765,49 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _backend_fp8_dtypes() -> tuple[str, ...] | None:
+    """The fp8 types the active Triton backend declares it can lower.
+
+    Returns None when the backend does not publish the list, which is not
+    evidence either way.
+    """
+    try:
+        backend = triton.compiler.compiler.make_backend(
+            triton.runtime.driver.active.get_current_target())
+        options = backend.parse_options({})
+    except Exception:
+        return None
+    declared = getattr(options, "supported_fp8_dtypes", None)
+    return None if declared is None else tuple(declared)
+
+
+def _xpu_int8_dot_reason(device) -> str | None:
+    """Check whether this backend can run tl.dot on INT8 operands at all.
+
+    The probe is deliberately tiny and runs before any large allocation: a
+    failure leaves the device context unusable, so nothing may depend on the
+    device afterwards.
+    """
+    size = 32
+    a = torch.randint(-1, 2, (size, size), device=device, dtype=torch.int8)
+    b = torch.randint(-1, 2, (size, size), device=device, dtype=torch.int8)
+    c = torch.zeros((size, size), device=device, dtype=torch.int32)
+    try:
+        _int8_dot_probe_kernel[(1,)](a, b, c, M=size, N=size, K=size)
+        torch.cuda.synchronize(device)
+    except Exception as exc:
+        summary = str(exc).strip().splitlines()
+        detail = summary[0][:160] if summary else type(exc).__name__
+        return ("The FlagTree XPU backend does not support tl.dot with INT8 operands: "
+                f"a minimal {size}x{size}x{size} INT8 dot fails ({detail}). "
+                "This is a backend limitation, not a determination of chip support")
+    if not torch.equal(c, torch.matmul(a.float(), b.float()).to(torch.int32)):
+        return ("The FlagTree XPU backend returns incorrect results for tl.dot with INT8 "
+                "operands; no verified native INT8 matrix path is available. "
+                "This is a backend limitation, not a determination of chip support")
+    return None
+
+
 def _capability_reason(args, metadata: dict) -> str | None:
     if getattr(torch, _dtype_name(args.dtype), None) is None:
         return f"This PyTorch build does not expose {_dtype_name(args.dtype)}"
@@ -762,6 +817,15 @@ def _capability_reason(args, metadata: dict) -> str | None:
         return f"FlagGems reports no FP64 support for {metadata['vendor_name']}"
     if args.dtype == "fp8" and args.mode != "peak":
         return "This benchmark implements FP8 E4M3FN in --mode peak only"
+    if (args.dtype == "fp8" and is_flagtree_xpu(metadata)
+            and _backend_fp8_dtypes() == ()):
+        # tl.dot rejects fp8 operands during compilation when the backend
+        # declares no fp8 type, so no FP8 matrix rate can be measured here.
+        # Other vendors reach their own storage and instruction probes, which
+        # give a more specific diagnosis than this declaration check.
+        return (f"The Triton backend for {metadata['vendor_name']} declares no supported FP8 "
+                "dtypes, so tl.dot cannot accept FP8 operands. This is a backend limitation, "
+                "not a determination of chip support")
     return None
 
 
@@ -791,6 +855,13 @@ def main() -> None:
     dtype = getattr(torch, dtype_name)
     device = get_device(args)
     torch.manual_seed(0)
+    # A failing INT8 dot faults the device context, so probe before allocating
+    # operands and report the backend limitation instead of a runtime error.
+    if args.dtype == "int8" and is_flagtree_xpu(metadata):
+        reason = _xpu_int8_dot_reason(device)
+        if reason is not None:
+            emit_unsupported("tensor", metadata, args, reason)
+            return
     try:
         if args.dtype == "fp32":
             metadata["tensor_precision_probe"] = _validate_fp32_precision(

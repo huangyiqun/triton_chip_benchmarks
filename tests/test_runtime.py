@@ -249,6 +249,46 @@ class RuntimeTests(unittest.TestCase):
         metadata = self.set_up_device(self.arguments(compute_units=40, l2_mib=12.5))
         self.assertEqual(metadata["sm_count"], 40)
         self.assertEqual(metadata["l2_cache_bytes"], int(12.5 * 2**20))
+        self.assertEqual(metadata["l2_cache_source"], "--l2-mib")
+
+    def test_flagtree_xpu_is_identified_by_vendor_not_backend_name(self):
+        # FlagTree's XPU driver reports backend='cuda', so the backend string
+        # alone cannot separate it from NVIDIA.
+        self.assertTrue(common.is_flagtree_xpu(
+            {"backend": "cuda", "vendor_name": "kunlunxin"}))
+        self.assertTrue(common.is_flagtree_xpu(
+            {"backend": "xpu", "vendor_name": "kunlunxin"}))
+        self.assertFalse(common.is_flagtree_xpu(
+            {"backend": "cuda", "vendor_name": "nvidia"}))
+        self.assertFalse(common.is_flagtree_xpu(
+            {"backend": "hip", "vendor_name": "amd"}))
+        self.assertFalse(common.is_flagtree_xpu({}))
+
+    def test_xpu_l3_capacity_is_parsed_from_xpu_smi_output(self):
+        xml = ("<xpusmi><gpu><l3_usage>\n"
+               "  <total>96 MiB</total>\n  <reserved>0 MiB</reserved>\n"
+               "  <used>0 MiB</used>\n  <free>96 MiB</free>\n"
+               "</l3_usage></gpu></xpusmi>")
+        self.assertEqual(common._parse_xpu_l3_bytes(xml), 96 * 2**20)
+        self.assertEqual(common._parse_xpu_l3_bytes("<total>2 GiB</total>"), 0)
+        self.assertEqual(common._parse_xpu_l3_bytes("<l3_usage><total>2 GiB</total>"),
+                         2 * 2**30)
+        # An unparsable or absent reading leaves the capacity unknown.
+        self.assertEqual(common._parse_xpu_l3_bytes("no cache information"), 0)
+
+    def test_xpu_l3_capacity_fills_in_a_zero_l2_report(self):
+        self.configure(vendor="kunlunxin")
+        with mock.patch.object(common, "_xpu_l3_cache_bytes", return_value=96 * 2**20):
+            metadata = self.set_up_device()
+        self.assertEqual(metadata["l2_cache_bytes"], 96 * 2**20)
+        self.assertEqual(metadata["l2_cache_source"], "xpu-smi L3 capacity")
+
+    def test_other_vendors_never_run_the_xpu_cache_query(self):
+        self.configure(vendor="nvidia")
+        with mock.patch.object(common, "_xpu_l3_cache_bytes",
+                               side_effect=AssertionError("must not query xpu-smi")):
+            metadata = self.set_up_device()
+        self.assertIn(metadata["l2_cache_bytes"], (None, 0))
 
     def test_unsupported_result_is_machine_readable_without_measurements(self):
         self.configure()

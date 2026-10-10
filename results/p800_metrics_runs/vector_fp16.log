@@ -1,0 +1,16 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+FlagTree XPU FP16 requires a fully unrolled loop; using 512 iterations to bound compile time (override with --iterations)
+FP16 vector: 8 independent MUL_ADD chains, 512 iterations; 2 operations per update
+XPU source uses multiply plus add for FlagTree vectorization; hardware fusion and native SIMD instructions are unverified
+Loop is fully unrolled: the FlagTree XPU compiler cannot lower an scf.for carrying FP16 state, so every iteration is emitted inline
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: events via FlagGems kunlunxin device events
+          1   1024    n/a       1        n/a    0.53823        0.125      0.125
+          1   2048    n/a       1        n/a    0.05520        2.431      2.433
+          2   1024    n/a       1        n/a    1.10216        0.122      0.123
+          2   2048    n/a       1        n/a    0.11020        2.436      2.438
+Peak measured FP16 vector workload throughput: 2.438 TFLOP/s (median 2.436 TFLOP/s; blocks/unit=2, block=2048, unroll=1)
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/vector_fp16.json

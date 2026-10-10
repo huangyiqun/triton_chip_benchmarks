@@ -234,6 +234,84 @@ class TensorFormatTests(unittest.TestCase):
                 tensor._validate_fp8_storage("cpu", tensor.torch.float8_e4m3fn)
         self.assertIsNone(tensor._unsupported_reason(caught.exception))
 
+    def test_backend_without_fp8_dtypes_is_unsupported_not_a_chip_verdict(self):
+        args = self.arguments("--dtype", "fp8", "--mode", "peak")
+        metadata = {"vendor_name": "kunlunxin", "backend": "cuda"}
+        with mock.patch.object(tensor, "_backend_fp8_dtypes", return_value=()):
+            reason = tensor._capability_reason(args, metadata)
+        self.assertIsNotNone(reason)
+        self.assertIn("no supported FP8 dtypes", reason)
+        self.assertIn("not a determination of chip support", reason)
+
+    def test_declared_fp8_dtypes_do_not_block_the_benchmark(self):
+        args = self.arguments("--dtype", "fp8", "--mode", "peak")
+        metadata = {"vendor_name": "kunlunxin", "backend": "cuda"}
+        for declared in (("fp8e4nv",), None):
+            with self.subTest(declared=declared):
+                with mock.patch.object(tensor, "_backend_fp8_dtypes", return_value=declared):
+                    self.assertIsNone(tensor._capability_reason(args, metadata))
+
+    def test_fp8_declaration_check_does_not_preempt_other_vendors(self):
+        """Ascend and NVIDIA must reach their own storage/instruction probes."""
+        args = self.arguments("--dtype", "fp8", "--mode", "peak")
+        for vendor in ("ascend", "nvidia", "amd"):
+            with self.subTest(vendor=vendor):
+                with mock.patch.object(tensor, "_backend_fp8_dtypes",
+                                       side_effect=AssertionError("must not query")):
+                    self.assertIsNone(tensor._capability_reason(
+                        args, {"vendor_name": vendor, "backend": "cuda"}))
+
+    def test_failing_int8_dot_probe_reports_a_backend_limitation(self):
+        class FailingKernel:
+            def __getitem__(self, _grid):
+                def launch(*_args, **_kwargs):
+                    raise RuntimeError("CUDA error: an illegal memory access "
+                                       "was encountered\nextra detail")
+                return launch
+
+        with mock.patch.object(tensor, "_int8_dot_probe_kernel", FailingKernel()), \
+             mock.patch.object(tensor.torch.cuda, "synchronize"):
+            reason = tensor._xpu_int8_dot_reason("cpu")
+        self.assertIn("does not support tl.dot with INT8 operands", reason)
+        self.assertIn("illegal memory access", reason)
+        self.assertIn("not a determination of chip support", reason)
+        # Only the first diagnostic line is quoted, not a whole stack dump.
+        self.assertNotIn("extra detail", reason)
+
+    def test_int8_probe_runs_before_any_operand_allocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "result.json"
+            with mock.patch("sys.argv", ["bench_tensor.py", "--dtype", "int8",
+                                         "--mode", "peak", "--output", str(path)]), \
+                 mock.patch.object(tensor, "setup_device", return_value={
+                     "vendor_name": "kunlunxin", "backend": "cuda"}), \
+                 mock.patch.object(tensor, "get_device", return_value="fake:0"), \
+                 mock.patch.object(tensor, "_xpu_int8_dot_reason",
+                                   return_value="backend cannot do INT8 dot"), \
+                 mock.patch.object(tensor, "_peak_inputs",
+                                   side_effect=AssertionError("must not allocate")), \
+                 mock.patch.object(tensor, "run_peak") as run, redirect_stdout(io.StringIO()):
+                tensor.main()
+            document = json.loads(path.read_text())
+        self.assertEqual(document["status"], "unsupported")
+        self.assertEqual(document["results"], [])
+        self.assertEqual(document["reason"], "backend cannot do INT8 dot")
+        run.assert_not_called()
+
+    def test_int8_probe_is_skipped_on_other_vendors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "result.json"
+            with mock.patch("sys.argv", ["bench_tensor.py", "--dtype", "int8",
+                                         "--mode", "peak", "--output", str(path)]), \
+                 mock.patch.object(tensor, "setup_device", return_value={
+                     "vendor_name": "nvidia", "backend": "cuda"}), \
+                 mock.patch.object(tensor, "get_device", return_value="fake:0"), \
+                 mock.patch.object(tensor, "_xpu_int8_dot_reason",
+                                   side_effect=AssertionError("must not probe")), \
+                 mock.patch.object(tensor, "run_peak") as run, redirect_stdout(io.StringIO()):
+                tensor.main()
+        run.assert_called_once()
+
     def test_unsupported_compile_never_enters_timer(self):
         args = self.arguments("--dtype", "int8", "--quick")
         with mock.patch.object(tensor, "available_memory_bytes", return_value=None), \

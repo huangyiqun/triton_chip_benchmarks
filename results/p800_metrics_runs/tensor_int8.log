@@ -1,0 +1,23 @@
+XCCL /root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/xccl//so/libbkcl.so loaded
+[35mSYMBOL_REWRITE [0m[32mtorch success[0m
+Device cuda:6: GPU | vendor=kunlunxin | Triton=cuda/3 | compute units=8 | memory=96.0 GiB
+FlagGems 4.2.1.rc.0, PyTorch 2.9.0+cu129, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+XX: (pid 51942,tid 139914109006976)cuda/src/cui/hal/kl3/kl3_gpfifo.cc:183:kl3ChannelCheckErrors kl3ChannelCheckErrors failed, error set to 66250, status= 700
+XX: (pid 51942,tid 139914109006976)cuda/src/cui/hal/kl3/kl3_gpfifo.cc:184:kl3ChannelCheckErrors A kernel exception has occurred, please check dmesg for details.
+XX: (pid 51942,tid 139914109006976)cuda/src/cui/hal/kl3/kl3_gpfifo.cc:183:kl3ChannelCheckErrors kl3ChannelCheckErrors failed, error set to 66250, status= 700
+XX: (pid 51942,tid 139914109006976)cuda/src/cui/hal/kl3/kl3_gpfifo.cc:184:kl3ChannelCheckErrors A kernel exception has occurred, please check dmesg for details.
+UNSUPPORTED: The FlagTree XPU backend does not support tl.dot with INT8 operands: a minimal 32x32x32 INT8 dot fails (CUDA error: an illegal memory access was encountered). This is a backend limitation, not a determination of chip support
+JSON: /workspace/triton_chip_benchmarks/results/p800_metrics_runs/tensor_int8.json
+XX: (pid 51942,tid 139914109006976)cuda/src/api/apimem.cc:302:cuapiMemFree_common cuapiMemFree() failed in cuiInitCheckCtx, Incompatible context or Context error, status= 700
+Exception ignored in atexit callback: <function _prepare_to_exit at 0x7f3d9ba1db40>
+Traceback (most recent call last):
+  File "/root/miniconda/envs/python310_torch29_cuda/lib/python3.10/site-packages/torch_xmlir/__init__.py", line 144, in _prepare_to_exit
+    _XMLIRC._prepare_to_exit()
+torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+Search for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+XX: (pid 51942,tid 139914109006976)cuda/src/api/apilaunch.cc:952:cuapi_xpu_wait cuapi_xpu_wait() failed in cuiInitCheckEx, status= 700
+XX: (pid 51942,tid 139914109006976)cuda/src/api/apimem.cc:302:cuapiMemFree_common cuapiMemFree() failed in cuiInitCheckCtx, Incompatible context or Context error, status= 700

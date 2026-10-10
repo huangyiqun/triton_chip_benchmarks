@@ -1,0 +1,56 @@
+{
+  "benchmark": "vector_fp64",
+  "status": "unsupported",
+  "reason": "FlagGems reports that this device does not support FP64 arithmetic",
+  "timestamp_utc": "2026-10-10T13:19:52.445245+00:00",
+  "device": {
+    "device_index": 6,
+    "device_type": "cuda",
+    "device_name": "GPU",
+    "vendor_name": "kunlunxin",
+    "backend": "cuda",
+    "architecture": "3",
+    "sm_count": 8,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 103079215104,
+    "memory_capacity_gib": 96.0,
+    "l2_cache_bytes": 100663296,
+    "l2_cache_source": "xpu-smi L3 capacity",
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.9.0+cu129",
+    "triton_version": "3.6.0",
+    "flaggems_version": "4.2.1.rc.0",
+    "device_api": "torch.cuda"
+  },
+  "arguments": {
+    "device": 6,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "events",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/p800_metrics_runs/vector_fp64.json",
+    "dtype": "fp64",
+    "iterations": 4096,
+    "blocks_per_sm": [
+      1,
+      2
+    ],
+    "block_sizes": [
+      1024,
+      2048
+    ],
+    "num_warps": [
+      null
+    ],
+    "unroll": [
+      1,
+      4
+    ],
+    "quick": false
+  },
+  "results": []
+}

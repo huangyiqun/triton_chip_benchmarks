@@ -2,6 +2,7 @@
 
 from contextlib import redirect_stdout
 import io
+import os
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -45,6 +46,18 @@ class BandwidthBackendTests(unittest.TestCase):
             bandwidth.launch_read(SimpleNamespace(numel=lambda: 1024), "sink", 1024, 4, "metax")
         self.assertEqual(kernel.kwargs["CACHE_MODIFIER"], "")
         self.assertEqual(kernel.kwargs["num_warps"], 4)
+
+    def test_flagtree_xpu_reporting_cuda_backend_omits_warps(self):
+        """FlagTree's XPU driver reports backend='cuda', like NVIDIA does."""
+        args = SimpleNamespace(num_warps=None, block_sizes=[1024], quick=False)
+        configurations = bandwidth.configure_launches(
+            args, {"backend": "cuda", "vendor_name": "kunlunxin"})
+        self.assertEqual(configurations, [(1024, None)])
+        self.assertEqual(args.num_warps, [None])
+
+    def test_masked_load_workaround_is_enabled_for_the_xpu_compiler(self):
+        # Masked lanes otherwise keep uninitialized memory instead of `other`.
+        self.assertEqual(os.environ.get("TRITONXPU_IS_USE_MASK_ZERO"), "1")
 
     def test_other_backend_defaults_and_quick_mode_remain_valid(self):
         for quick, expected in ((False, [4, 8]), (True, [4])):

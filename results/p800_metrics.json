@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "benchmark": "chip_metric_suite",
+  "timestamp_utc": "2026-10-10T13:21:24.812913+00:00",
+  "status": "running",
+  "device": {},
+  "smoke_only": false,
+  "measurement_policy": "Highest observed valid throughput; median from the same configuration. Capacity is reported device capacity. Bandwidth is effective copy read+write traffic with HBM-sized buffers; read rates are auxiliary details. Unsupported and not-implemented metrics have no numeric value; errors do not imply unsupported hardware.",
+  "results": [
+    {
+      "metric": "memory_capacity",
+      "group": "Memory",
+      "precision": null,
+      "unit": "GiB",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "memory_bandwidth",
+      "group": "Memory",
+      "precision": null,
+      "unit": "GB/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_bf16",
+      "group": "Tensor",
+      "precision": "bf16",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_fp16",
+      "group": "Tensor",
+      "precision": "fp16",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_fp32",
+      "group": "Tensor",
+      "precision": "fp32",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_tf32",
+      "group": "Tensor",
+      "precision": "tf32",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_int8",
+      "group": "Tensor",
+      "precision": "int8",
+      "unit": "TOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_fp64",
+      "group": "Tensor",
+      "precision": "fp64",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "tensor_fp8",
+      "group": "Tensor",
+      "precision": "fp8",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_bf16",
+      "group": "Vector",
+      "precision": "bf16",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_fp16",
+      "group": "Vector",
+      "precision": "fp16",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_fp32",
+      "group": "Vector",
+      "precision": "fp32",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_int8",
+      "group": "Vector",
+      "precision": "int8",
+      "unit": "TOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_fp64",
+      "group": "Vector",
+      "precision": "fp64",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    },
+    {
+      "metric": "vector_fp8",
+      "group": "Vector",
+      "precision": "fp8",
+      "unit": "TFLOP/s",
+      "status": "pending",
+      "value": null,
+      "median_value": null
+    }
+  ]
+}
