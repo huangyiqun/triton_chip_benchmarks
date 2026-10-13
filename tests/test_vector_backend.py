@@ -153,6 +153,107 @@ class VectorBackendTests(unittest.TestCase):
         self.assertIsNone(info["register_spills"])
         self.assertIn("placeholder", info["assembly_check"])
 
+    def test_missing_fma_lowering_falls_back_to_multiply_add(self):
+        """A backend may carry a dtype but reject tl.fma; keep a measurable path."""
+        def failing_probe(dtype, device):
+            raise RuntimeError("PassManager::run failed")
+
+        original = vector._fma_probe_kernel
+        vector._fma_probe_kernel = SimpleNamespace(
+            __getitem__=lambda self, grid: failing_probe)
+        try:
+            supported, reason = vector.backend_supports_explicit_fma("bf16", "cpu")
+        finally:
+            vector._fma_probe_kernel = original
+        self.assertFalse(supported)
+        self.assertIn("cannot lower tl.fma for BF16", reason)
+
+    def test_unexposed_dtype_storage_reports_no_fma_support(self):
+        original = vector.DTYPES["fp8"]
+        vector.DTYPES["fp8"] = None
+        try:
+            supported, reason = vector.backend_supports_explicit_fma("fp8", "cpu")
+        finally:
+            vector.DTYPES["fp8"] = original
+        self.assertFalse(supported)
+        self.assertIn("does not expose FP8 storage", reason)
+
+    def test_maca_promoted_bf16_arithmetic_is_not_native(self):
+        """MetaX widens BF16 to FP32, so the rate must not be called native."""
+        compiled = SimpleNamespace(n_regs=30, n_spills=0, asm={
+            "llir": "%41 = fmul float %37, %40\n%49 = fadd float %45, %48\n"})
+        info = vector.inspect_assembly(compiled, "metax", "bf16", backend="maca")
+        self.assertFalse(info["native_arithmetic_verified"])
+        self.assertTrue(info["maca_arithmetic_promoted"])
+        self.assertEqual(info["maca_arithmetic_llvm_types"], ["float"])
+        self.assertIn("not a native BF16 vector rate", info["assembly_check"])
+        # Register metadata stays usable for spill-based exclusion.
+        self.assertEqual(info["registers_per_thread"], 30)
+        self.assertEqual(info["register_spills"], 0)
+
+    def test_maca_retained_dtype_arithmetic_stays_unverified(self):
+        """Matching IR width is still not final ISA proof of a native instruction."""
+        compiled = SimpleNamespace(n_regs=40, n_spills=0, asm={
+            "llir": "%4 = call float @llvm.fma.f32(float %1, float %2, float %3)\n"})
+        info = vector.inspect_assembly(compiled, "metax", "fp32", backend="maca")
+        self.assertFalse(info["native_arithmetic_verified"])
+        self.assertFalse(info["maca_arithmetic_promoted"])
+        self.assertIn("not final ISA evidence", info["assembly_check"])
+
+    def test_maca_without_llir_reports_unaudited_arithmetic(self):
+        compiled = SimpleNamespace(n_regs=12, n_spills=0, asm={})
+        info = vector.inspect_assembly(compiled, "metax", "bf16", backend="maca")
+        self.assertFalse(info["maca_llir_available"])
+        self.assertFalse(info["native_arithmetic_verified"])
+        self.assertIn("unaudited", info["assembly_check"])
+
+    def test_widened_fma_probe_offered_only_for_narrow_floats(self):
+        """FP32/FP64 must not be "widened": that would narrow the arithmetic."""
+        for dtype in ("fp32", "fp64", "int8"):
+            supported, reason = vector.backend_supports_widened_fma(dtype, "cpu")
+            self.assertFalse(supported)
+            self.assertIsNone(reason)
+
+    def test_widened_fma_probe_failure_is_reported(self):
+        def failing_probe(*args, **kwargs):
+            raise RuntimeError("PassManager::run failed")
+
+        original = vector._widened_fma_probe_kernel
+        vector._widened_fma_probe_kernel = SimpleNamespace(
+            __getitem__=lambda self, grid: failing_probe)
+        try:
+            supported, reason = vector.backend_supports_widened_fma("bf16", "cpu")
+        finally:
+            vector._widened_fma_probe_kernel = original
+        self.assertFalse(supported)
+        self.assertIn("cannot lower an FP32-widened FMA for BF16", reason)
+
+    def test_widened_fma_launch_sets_the_constexpr(self):
+        kernel = RecordingKernel()
+        vector.launch_vector(kernel, (4,), "in", "out", "coeff", 128, 32, 64, 1,
+                             False, 4, use_widened_fma=True)
+        self.assertTrue(kernel.kwargs["USE_WIDENED_FMA"])
+        self.assertEqual(kernel.kwargs["num_warps"], 4)
+
+    def test_mul_add_launch_omits_the_widened_constexpr(self):
+        kernel = RecordingKernel()
+        vector.launch_vector(kernel, (4,), "in", "out", "coeff", 128, 32, 64, 1,
+                             False, 4)
+        self.assertNotIn("USE_WIDENED_FMA", kernel.kwargs)
+
+    def test_maca_counts_narrowing_conversions_for_narrow_floats(self):
+        """Conversions back to BF16 prove the state kept the narrow dtype."""
+        compiled = SimpleNamespace(n_regs=30, n_spills=0, asm={"llir": (
+            "%1 = call <2 x float> @llvm.mxc.pk.fma.f32(<2 x float> %a)\n"
+            "%2 = call i16 @llvm.mxc.cvt.f32tobf16(float %1)\n"
+            "%3 = call i16 @llvm.mxc.cvt.f32tobf16(float %2)\n")})
+        info = vector.inspect_assembly(compiled, "metax", "bf16", backend="maca")
+        self.assertEqual(info["maca_narrowing_conversion_sites"], 2)
+        self.assertIn("@llvm.mxc.pk.fma.f32", info["maca_arithmetic_intrinsics"])
+        # Widened arithmetic is still not a native BF16 rate.
+        self.assertTrue(info["maca_arithmetic_promoted"])
+        self.assertFalse(info["native_arithmetic_verified"])
+
 
 if __name__ == "__main__":
     unittest.main()

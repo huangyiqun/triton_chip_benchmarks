@@ -1,0 +1,69 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "The backend cannot lower tl.dot for FP8 operands at any tested tile shape: 32x32x64: PassManager::run failed; 64x64x64: PassManager::run failed",
+  "timestamp_utc": "2026-10-13T06:58:38.364698+00:00",
+  "device": {
+    "device_index": 5,
+    "device_type": "cuda",
+    "device_name": "MetaX C550",
+    "vendor_name": "metax",
+    "backend": "maca",
+    "architecture": "80",
+    "sm_count": 104,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 68283269120,
+    "memory_capacity_gib": 63.59375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0+metax3.8.1.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.3.5",
+    "device_api": "torch.cuda",
+    "input_format": "e4m3fn",
+    "input_storage_dtype": "e4m3fn",
+    "dot_input_precision": null,
+    "math_mode": "fp8",
+    "tensor_storage_probe": {
+      "passed": true,
+      "max_abs_error": 0.0,
+      "probe_values": [
+        0.0625,
+        -0.0625,
+        1.0
+      ],
+      "description": "FP8 E4M3FN storage round-trip of exactly representable values"
+    }
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp8",
+    "input_precision": null,
+    "quick": false,
+    "device": 5,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_fp8.json",
+    "requested_dtype": "fp8"
+  },
+  "results": []
+}

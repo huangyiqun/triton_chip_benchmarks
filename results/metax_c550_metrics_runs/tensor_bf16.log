@@ -1,0 +1,20 @@
+/flagos/lib/python3.12/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:5: MetaX C550 | vendor=metax | Triton=maca/80 | compute units=104 | memory=63.6 GiB
+FlagGems 5.3.5, PyTorch 2.10.0+metax3.8.1.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Instruction audit unavailable for metax; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems metax device events
+   32/32/32          1      4     0.4459    0.4459        31.30      31.31    62
+   32/32/32          2      4     0.6221    0.6218        44.88      44.90    62
+   32/32/32          4      4     1.0618    1.0614        52.59      52.60    62
+   32/32/32          8      4     1.9528    1.9525        57.18      57.19    62
+   64/64/32          1      4     0.7675    0.7674        72.75      72.75   100
+   64/64/32          2      4     1.1170    1.1163        99.98     100.04   100
+   64/64/32          4      4     1.9402    1.9383       115.11     115.22   100
+   64/64/32          8      4     3.6713    3.6684       121.67     121.76   100
+Measured tl.dot throughput (native execution unverified): 121.76 TFLOP/s (same configuration median 121.67 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_bf16.json

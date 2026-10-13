@@ -120,6 +120,9 @@ Missing device properties are not filled with specifications from another chip. 
 - IEEE FP32 may use scalar/vector FMA instructions (SIMT) on NVIDIA. Such results are labeled **IEEE FP32 matrix throughput**, without claiming a tensor-core peak. Backends with native FP32 matrix instructions may use those instead.
 - The backend's native accumulation policy is used. FP32 output does not imply that internal accumulation always has full IEEE FP32 precision. On H20, forcing `max_num_imprecise_acc=0` falls back to FP16 instructions, so that path is not labeled as an FP8 peak measurement.
 - All outputs are validated numerically. FP32 runs also perform an untimed precision probe using `1 + 2^-12`, `1 + 2^-9`, and `2^20` in `A` with an identity matrix `B`. The first value distinguishes IEEE FP32 from TF32, the second rejects a BF16 fallback, and the third rejects an FP16 fallback. This validates the requested math mode even though the exact-check inputs used for peak timing are representable in all of them. The run stops if compilation rejects the requested mode or this probe disagrees with it.
+- The FP64 probe additionally carries a distinct marker value per row, so a backend that computes every product correctly but delivers it to the wrong output row is rejected by name. MetaX has exactly that defect; a probe with uniform rows cannot see it.
+- Peak-mode outputs are checked against the exact scaled dot reference with `rtol=0` and an analytic `atol` bounding the accumulated accumulator rounding (`4 × iterations × block_k / 256 × unit_roundoff`). INT8 keeps exact equality. At the 1024-iteration default the FP32-accumulator bound is 128× smaller than the `1/256` lattice step of the exact-fraction operands, so a single dropped iteration, a merged accumulator chain, or an unwritten output is still rejected. Bit-exact equality is not required because some backends round inside the MMA itself: MetaX returns BF16/FP16/TF32 results a few `2^-33` off the exact lattice point.
+- Formats whose `tl.dot` the backend cannot lower are reported as `unsupported` from a small compile probe run before the sweep, rather than aborting the metric. Holding a dtype in memory does not imply a dot lowering exists for it: MetaX stores FP8 exactly but fails to lower any FP8 `tl.dot`.
 - NVIDIA/AMD instruction audits distinguish matrix instructions from SIMT FMA and verify the requested FP16, BF16, FP32, TF32, INT8, FP64, or FP8 operand format. A kernel lowered to another dtype is rejected for that metric. Other vendors retain the validated measurement with suite status `unverified` when instruction precision or execution cannot be audited. Missing register/spill attributes are recorded as `null`.
 - FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
 
@@ -159,6 +162,12 @@ Other-backend typed INT8 MUL+ADD operations = 2 × 8 × elements_per_chain × it
 ```
 
 Floating-point modes count one multiplication plus one addition as 2 FLOPs. NVIDIA audits the generated PTX for the requested native FMA dtype and rejects tensor instructions or widened FP16/BF16 arithmetic. NVIDIA INT8 uses and audits `dp4a`: four signed INT8 products plus four INT32 additions per update, counted as 8 operations. Other backends try typed INT8 input, coefficients, state, and output with modulo-256 multiply plus add, counted as 2 operations. Integer overflow checks are disabled only for those two intentional modular operations so they remain typed INT8 in Triton IR. The full output is validated exactly; without final ISA evidence of native INT8 arithmetic, the suite retains a numeric rate as `unverified`. An explicit compiler rejection is reported as `unsupported`. Other successfully measured Vector formats without a native instruction audit also receive `unverified`. Floating output validation is exact for BF16/FP16 and bounded against FP64 references for FP32/FP64. FP8 currently returns `not_implemented` because the benchmark has no verified native FP8 vector arithmetic path; FP8 storage or Tensor instructions are not counted as Vector FP8 throughput.
+
+A backend can carry a dtype through loads, stores, and `*`/`+` while having no fused multiply-add lowering for it. Before sweeping, the benchmark compiles a small `tl.fma` probe for the requested dtype. MetaX fails this probe for BF16: the MACA backend represents BF16 as `i16`, which `llvm.intr.fma` rejects, so `tl.fma` fails in `ConvertTritonGPUToLLVM`.
+
+When `tl.fma` does not lower for BF16 or FP16, the benchmark tries a second probe before giving up on fusion: an FP32-widened FMA that keeps the recurrence state in the narrow dtype. A backend with no native arithmetic for that type computes it by extending to FP32 anyway, so this is the same arithmetic the emulated path performs, with one rounding per update just like `tl.fma`. The loop-invariant coefficients are widened once outside the loop, which the MACA backend does not do on its own. That path records `operation: WIDENED_FMA`, `widened_fma_used: true`, and `roundings_per_update: 1`, and the result file is named `vector_<dtype>_widened_fma`. If this probe also fails, the sweep falls back to source multiply plus add with `roundings_per_update: 2`. `hardware_fusion_verified` stays false on both fallbacks.
+
+On MetaX the benchmark audits the arithmetic width in the final LLVM IR, the last artifact that backend exposes. A BF16 kernel whose only arithmetic is `fmul float`/`fadd float`, or whose FMA intrinsic is `@llvm.mxc.pk.fma.f32`, reached FP32 execution units; that is recorded as `maca_arithmetic_promoted: true` and keeps the suite status at `unverified`. For BF16/FP16 the audit also counts `llvm.mxc.cvt.f32to{bf16,f16}` sites as `maca_narrowing_conversion_sites`: a nonzero count confirms every result was rounded back to the narrow dtype, rather than the state staying in FP32 and converting only once at the end. LLVM IR is not final ISA evidence, so this audit never sets `native_arithmetic_verified`, even when the IR width matches the request.
 
 FlagTree's KunlunXin XPU backend reports clusters as `multiprocessor_count`, uses 64 cores per cluster, and does not use Triton's `num_warps` tuning parameter. The benchmark therefore starts with 1/2 programs per cluster and blocks of 1024/2048 FP32-sized elements, which provide 16/32 elements per core for its 512-bit vectorization path. Typed INT8 uses blocks of 4096/8192 so each core receives 64/128 elements, matching one or two 512-bit INT8 vectors. Floating kernels emit source multiply plus add operations so the XPU vectorizer can process and fuse them. The result remains unverified unless the final textual ISA contains an explicitly matching instruction type; intermediate typed-vector IR is recorded as supporting evidence, but is not treated as final ISA proof. XPU currently supplies placeholder zero register/spill counts, so the JSON records those fields as unknown.
 
@@ -257,6 +266,65 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 python bench_vector.py --quick --timing auto --warmup 2 --rep 5 --rounds 3
 python bench_vector.py --quick --timing events --warmup 2 --rep 5 --rounds 3
 ```
+
+### MetaX C550 BF16 and FP32 Vector Measurements on 2026-10-13
+
+Measured on an idle MetaX C550 (104 compute units, 64 GiB) with PyTorch 2.10.0+metax3.8.1.0, FlagTree 0.6.1+metax3.6 (Triton 3.6.0), FlagGems 5.3.5, and MACA 3.8.1.3. Both sweeps used FlagGems graph execution with device-event timing and 4096 iterations. All 24 BF16 configurations passed numerical validation exactly (`max_abs_error` 0) with zero register spills and no excluded configurations.
+
+| Math mode | Source operation | Peak | Median at that configuration | Suite status |
+| --- | --- | ---: | ---: | --- |
+| Vector BF16 | FP32-widened FMA, BF16 state | **2.784 TFLOP/s** | 2.784 TFLOP/s | `unverified` |
+| Vector FP32 | `tl.fma` | **35.988 TFLOP/s** | 35.981 TFLOP/s | `unverified` |
+
+Selected BF16 configuration: 16 blocks/unit, block 512, unroll 8, 4 warps.
+
+This chip has no native BF16 ALU, so BF16 remains far below FP32. `mxcc` carries `__builtin_mxc_fma_bf16` and `__builtin_mxc_pk_fma_bf16`, but both require target feature `xcore1500` or newer; C550 reports `xcore1002`. The vendor toolchain confirms the consequence: compiling MACA's own `__hfma`/`__hfma2` for `__maca_bfloat16` with `mxcc --offload-arch=xcore1002` emits `@llvm.fma.f32`, while the same code for `__half` emits native `@llvm.fma.f16` and `@llvm.fma.v2f16`.
+
+Every BF16 result therefore has to pass through one `llvm.mxc.cvt.f32tobf16`, and that conversion rather than the FP32 multiply-add is the limit. Keeping the recurrence state in FP32 and converting only once at the end reaches 35.64 TFLOP/s, within 1% of the measured FP32 rate, which shows the FP32 units are not the bottleneck. That variant is FP32 arithmetic with BF16 storage, so it is not reported as a BF16 rate. The 2.784 TFLOP/s figure measures BF16-typed work executed on FP32 units with the BF16 state preserved every iteration (129 narrowing conversion sites in the selected kernel), and is reported as `unverified` rather than `ok`.
+
+Two MACA backend defects were found and worked around while taking this measurement; both are written up in [flagtree_metax_bug.md](flagtree_metax_bug.md). `tl.fma` on BF16 fails to lower at all, and the backend does not hoist the loop-invariant BF16 operand widening out of the loop. Addressing the second in the Triton source raised the measurement from 1.296 to 2.784 TFLOP/s with identical, exactly validated numerics.
+
+```bash
+python bench_vector.py --device 0 --dtype bf16 --timing auto \
+  --output results/c550_vector_bf16.json
+python bench_vector.py --device 1 --dtype fp32 --timing auto \
+  --output results/c550_vector_fp32.json
+```
+
+Raw records: [BF16 full sweep](results/c550_vector_bf16.json), [FP32 full sweep](results/c550_vector_fp32.json).
+
+### MetaX C550 Complete Metric Table on 2026-10-13
+
+Full 15-metric suite on one idle C550 of eight, same software stack as above, with FlagGems graph execution and device-event timing. No metric ended in `error`; the two without a value are explicit backend rejections, diagnosed by a probe before the sweep rather than by a failed measurement.
+
+| Metric | Peak | Median | Unit | Status |
+| --- | ---: | ---: | --- | --- |
+| memory_capacity | 63.594 | - | GiB | `ok` |
+| memory_bandwidth | 1526.034 | 1525.444 | GB/s | `ok` |
+| tensor_bf16 | 121.764 | 121.667 | TFLOP/s | `unverified` |
+| tensor_fp16 | 121.755 | 121.690 | TFLOP/s | `unverified` |
+| tensor_fp32 | 35.951 | 35.948 | TFLOP/s | `unverified` |
+| tensor_tf32 | 100.838 | 100.793 | TFLOP/s | `unverified` |
+| tensor_int8 | 101.349 | 101.317 | TOP/s | `unverified` |
+| tensor_fp64 | - | - | TFLOP/s | `unsupported` |
+| tensor_fp8 | - | - | TFLOP/s | `unsupported` |
+| vector_bf16 | 2.784 | 2.784 | TFLOP/s | `unverified` |
+| vector_fp16 | 9.081 | 9.077 | TFLOP/s | `unverified` |
+| vector_fp32 | 35.990 | 35.982 | TFLOP/s | `unverified` |
+| vector_int8 | 9.081 | 9.078 | TOP/s | `unverified` |
+| vector_fp64 | 2.264 | 2.263 | TFLOP/s | `unverified` |
+| vector_fp8 | - | - | TFLOP/s | `not_implemented` |
+
+Peak values are reproducible to within 0.03% across three independent full-suite runs.
+
+Every Tensor and Vector row is `unverified` because the MACA backend has no final-ISA disassembler here, so native instruction precision and execution unit cannot be audited; the numeric rates are measured and validated. `tensor_fp64` and `tensor_fp8` are `unsupported` because of MACA defects 3 and 4 in [flagtree_metax_bug.md](flagtree_metax_bug.md): FP64 `tl.dot` returns correct products in permuted output rows, and no FP8 `tl.dot` lowers. Vector FP64 is unaffected and measures normally, since it needs no `tl.dot`.
+
+```bash
+python bench_suite.py --device 5 --timing auto \
+  --output results/metax_c550_metrics.json
+```
+
+Raw records: [complete table](results/metax_c550_metrics.json), with per-metric JSON and logs in `results/metax_c550_metrics_runs/`.
 
 ### H20 IEEE FP32 and TF32 Measurements on 2026-09-16
 

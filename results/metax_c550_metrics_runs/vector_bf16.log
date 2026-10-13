@@ -1,0 +1,72 @@
+/flagos/lib/python3.12/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:5: MetaX C550 | vendor=metax | Triton=maca/80 | compute units=104 | memory=63.6 GiB
+FlagGems 5.3.5, PyTorch 2.10.0+metax3.8.1.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+/workspace/triton_chip_benchmarks/bench_vector.py:85:44: error: 'llvm.intr.fma' op operand #0 must be floating point LLVM type or LLVM dialect-compatible vector of floating point LLVM type, but got 'i16'
+    tl.store(Output + offsets, tl.fma(x, a, b))
+                                           ^
+#blocked = #ttg.blocked<{sizePerThread = [1], threadsPerWarp = [64], warpsPerCTA = [4], order = [0]}>
+module attributes {"ttg.num-ctas" = 1 : i32, "ttg.num-warps" = 4 : i32, ttg.target = "cuda:80", "ttg.threads-per-warp" = 64 : i32, use.opt.maca.mma = 0 : i32} {
+  tt.func public @_fma_probe_kernel(%arg0: !tt.ptr<bf16> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<bf16> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %cst = arith.constant dense<64> : tensor<32xi32, #blocked>
+    %cst_0 = arith.constant dense<32> : tensor<32xi32, #blocked>
+    %0 = tt.make_range {end = 32 : i32, start = 0 : i32} : tensor<32xi32, #blocked>
+    %1 = tt.splat %arg0 : !tt.ptr<bf16> -> tensor<32x!tt.ptr<bf16>, #blocked>
+    %2 = tt.addptr %1, %0 : tensor<32x!tt.ptr<bf16>, #blocked>, tensor<32xi32, #blocked>
+    %3 = tt.load %2 : tensor<32x!tt.ptr<bf16>, #blocked>
+    %4 = tt.addptr %2, %cst_0 : tensor<32x!tt.ptr<bf16>, #blocked>, tensor<32xi32, #blocked>
+    %5 = tt.load %4 : tensor<32x!tt.ptr<bf16>, #blocked>
+    %6 = tt.addptr %2, %cst : tensor<32x!tt.ptr<bf16>, #blocked>, tensor<32xi32, #blocked>
+    %7 = tt.load %6 : tensor<32x!tt.ptr<bf16>, #blocked>
+    %8 = tt.splat %arg1 : !tt.ptr<bf16> -> tensor<32x!tt.ptr<bf16>, #blocked>
+    %9 = tt.addptr %8, %0 : tensor<32x!tt.ptr<bf16>, #blocked>, tensor<32xi32, #blocked>
+    %10 = math.fma %3, %5, %7 : tensor<32xbf16, #blocked>
+    tt.store %9, %10 : tensor<32x!tt.ptr<bf16>, #blocked>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(tritongpu-combine-tensor-select-and-if, convert-scf-to-cf, convert-index-to-llvm{index-bitwidth=0}, allocate-shared-memory, tritongpu-global-scratch-memory-allocation, convert-triton-gpu-to-llvm{compute-capability=80}, convert-arith-to-llvm{index-bitwidth=0}, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, cse, symbol-dce, enable-line-info)",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/workspace/triton_chip_benchmarks/bench_vector.py:78:0: error: Failures have been detected while processing an MLIR pass pipeline
+/workspace/triton_chip_benchmarks/bench_vector.py:78:0: note: Pipeline failed while executing [`ConvertTritonGPUToLLVM` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+BF16 vector: 8 independent WIDENED_FMA chains, 4096 iterations; 2 operations per update
+Backend cannot lower tl.fma for BF16; using source multiply plus add: PassManager::run failed
+Hardware fusion is therefore unverified: the measured rate reflects the source multiply/add workload, not a verified fused native peak
+Using an FP32-widened FMA with BF16 state: one rounding per update, and the loop-invariant coefficients are widened once outside the loop
+This is the arithmetic a backend without native BF16 units performs anyway; it is still not a native BF16 vector peak
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems metax device events
+          8    256      4       1         29    5.48902        2.543      2.543
+          8    256      4       4         29    5.40659        2.582      2.583
+          8    256      4       8         29    5.38816        2.591      2.591
+          8    256      8       1         30   10.94067        1.276      1.276
+          8    256      8       4         30   10.79347        1.293      1.294
+          8    256      8       8         30   10.76480        1.297      1.297
+          8    512      4       1         58   10.38656        2.688      2.688
+          8    512      4       4         58   10.11123        2.761      2.761
+          8    512      4       8         58   10.07693        2.770      2.771
+          8    512      8       1         29   10.91917        2.557      2.557
+          8    512      8       4         29   10.78758        2.588      2.588
+          8    512      8       8         29   10.76429        2.594      2.594
+         16    256      4       1         29   10.92301        2.556      2.557
+         16    256      4       4         29   10.78810        2.588      2.588
+         16    256      4       8         29   10.76224        2.594      2.594
+         16    256      8       1         30   21.78278        1.282      1.282
+         16    256      8       4         30   21.53382        1.296      1.297
+         16    256      8       8         30   21.48992        1.299      1.299
+         16    512      4       1         58   20.64358        2.705      2.705
+         16    512      4       4         58   20.13491        2.773      2.773
+         16    512      4       8         58   20.05606        2.784      2.784
+         16    512      8       1         29   21.75526        2.566      2.567
+         16    512      8       4         29   21.52768        2.594      2.594
+         16    512      8       8         29   21.48890        2.598      2.598
+Peak measured BF16 vector workload throughput: 2.784 TFLOP/s (median 2.784 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=4)
+JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/vector_bf16.json

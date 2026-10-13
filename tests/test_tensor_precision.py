@@ -177,6 +177,105 @@ class TensorPrecisionTests(unittest.TestCase):
         self.assertFalse(info["instruction_precision_verified"])
         self.assertFalse(info["native_tensor_verified"])
 
+    def test_peak_tolerance_stays_far_below_a_dropped_iteration(self):
+        """An MMA that rounds internally must pass; a skipped operation must not."""
+        iterations, block_k = 1024, 32
+        tolerance = tensor._peak_tolerance("bf16", block_k, iterations)
+        # The smallest fault the exact check existed to catch: one of the
+        # iterations missing changes an entry by at least one lattice step.
+        self.assertLess(tolerance * 64, 1 / 256)
+        # The rounding actually observed on a backend whose MMA rounds products.
+        self.assertGreater(tolerance, 1.9073486328125e-06)
+
+    def test_peak_tolerance_is_exact_for_integer_accumulation(self):
+        self.assertEqual(tensor._peak_tolerance("int8", 64, 4096), 0.0)
+
+    def test_peak_tolerance_scales_with_accumulator_width(self):
+        self.assertLess(tensor._peak_tolerance("fp64", 16, 1024),
+                        tensor._peak_tolerance("fp32", 16, 1024))
+
+    def test_validate_peak_rejects_a_difference_above_the_bound(self):
+        import torch
+
+        reference = torch.zeros((4, 4), dtype=torch.float32)
+        actual = reference.clone()
+        actual[0, 0] = tensor._peak_tolerance("bf16", 32, 1024) * 10
+        with self.assertRaises(AssertionError):
+            tensor._validate_peak(actual, reference, "bf16", 32, 1024)
+
+    def test_validate_peak_accepts_bounded_rounding_and_reports_it(self):
+        import torch
+
+        reference = torch.zeros((4, 4), dtype=torch.float32)
+        actual = reference.clone()
+        actual[0, 0] = 1.9073486328125e-06
+        result = tensor._validate_peak(actual, reference, "bf16", 32, 1024)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["rtol"], 0)
+        self.assertGreater(result["atol"], 0)
+        self.assertAlmostEqual(result["max_abs_error"], 1.9073486328125e-06)
+
+    def test_row_multiset_detects_a_permutation_but_not_a_value_error(self):
+        import torch
+
+        expected = torch.arange(16, dtype=torch.float64).reshape(4, 4)
+        permuted = expected[[0, 2, 1, 3], :]
+        self.assertTrue(tensor._row_multiset_matches(permuted, expected))
+        wrong = expected.clone()
+        wrong[0, 0] += 1
+        self.assertFalse(tensor._row_multiset_matches(wrong, expected))
+
+    def test_dot_lowering_failure_is_reported_as_unsupported(self):
+        """A dtype can be storable while tl.dot has no lowering for it."""
+        import torch
+
+        def failing(*args, **kwargs):
+            raise RuntimeError("PassManager::run failed")
+
+        shapes = [{"block_m": 16, "block_n": 16, "block_k": 64, "num_warps": 4}]
+        with mock.patch.object(tensor, "_launch_peak", failing):
+            with self.assertRaises(tensor.TensorUnsupportedError) as caught:
+                tensor._validate_dot_lowering(
+                    torch.device("cpu"), torch.float32, "fp8", "peak", shapes)
+        self.assertIn("cannot lower tl.dot for FP8", str(caught.exception))
+
+    def test_dot_lowering_accepts_a_format_any_tile_can_compile(self):
+        """One bad tile shape must not discard a measurable format."""
+        import torch
+
+        calls = []
+
+        def sometimes(a, b, c, iterations, config, precision=None):
+            calls.append(config["block_m"])
+            if config["block_m"] == 32:
+                raise RuntimeError("shape-specific lowering failure")
+            return "compiled"
+
+        shapes = [{"block_m": 32, "block_n": 32, "block_k": 64, "num_warps": 4},
+                  {"block_m": 64, "block_n": 64, "block_k": 64, "num_warps": 4}]
+        with mock.patch.object(tensor, "_launch_peak", sometimes):
+            result = tensor._validate_dot_lowering(
+                torch.device("cpu"), torch.float32, "fp8", "peak", shapes)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["probed_tile"], "64x64x64")
+        self.assertEqual(len(result["rejected_tiles"]), 1)
+        self.assertEqual(calls, [32, 64])
+
+    def test_dot_lowering_does_not_blame_dtype_for_resource_limits(self):
+        """A tile too large to launch is not evidence about the dtype."""
+        import torch
+        import triton
+
+        def oom(*args, **kwargs):
+            raise triton.OutOfResources(2048, 1024, "shared memory")
+
+        shapes = [{"block_m": 64, "block_n": 64, "block_k": 64, "num_warps": 4}]
+        with mock.patch.object(tensor, "_launch_peak", oom):
+            with self.assertRaises(tensor.TensorUnsupportedError) as caught:
+                tensor._validate_dot_lowering(
+                    torch.device("cpu"), torch.float32, "fp8", "peak", shapes)
+        self.assertIn("resource limit", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

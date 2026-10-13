@@ -1,0 +1,6 @@
+/flagos/lib/python3.12/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:5: MetaX C550 | vendor=metax | Triton=maca/80 | compute units=104 | memory=63.6 GiB
+FlagGems 5.3.5, PyTorch 2.10.0+metax3.8.1.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+UNSUPPORTED: The backend did not compute FP64 tl.dot correctly: the returned rows are a permutation of the correct rows, so products are computed but written to the wrong output row
+JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_fp64.json

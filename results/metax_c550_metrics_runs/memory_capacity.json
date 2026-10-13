@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "device": {
+    "device_index": 5,
+    "device_type": "cuda",
+    "device_name": "MetaX C550",
+    "vendor_name": "metax",
+    "backend": "maca",
+    "architecture": "80",
+    "sm_count": 104,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 68283269120,
+    "memory_capacity_gib": 63.59375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0+metax3.8.1.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.3.5",
+    "device_api": "torch.cuda"
+  },
+  "results": []
+}

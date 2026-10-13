@@ -1,0 +1,58 @@
+{
+  "benchmark": "vector_fp8",
+  "status": "not_implemented",
+  "reason": "This benchmark has no implemented and verified native FP8 vector arithmetic path; FP8 storage, conversions, or tensor instructions do not measure native FP8 vector throughput. This does not determine chip support",
+  "timestamp_utc": "2026-10-13T07:01:55.496538+00:00",
+  "device": {
+    "device_index": 5,
+    "device_type": "cuda",
+    "device_name": "MetaX C550",
+    "vendor_name": "metax",
+    "backend": "maca",
+    "architecture": "80",
+    "sm_count": 104,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 68283269120,
+    "memory_capacity_gib": 63.59375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0+metax3.8.1.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.3.5",
+    "device_api": "torch.cuda"
+  },
+  "arguments": {
+    "device": 5,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/vector_fp8.json",
+    "dtype": "fp8",
+    "iterations": 4096,
+    "blocks_per_sm": [
+      8,
+      16
+    ],
+    "block_sizes": [
+      256,
+      512
+    ],
+    "num_warps": [
+      4,
+      8
+    ],
+    "unroll": [
+      1,
+      4,
+      8
+    ],
+    "quick": false
+  },
+  "results": []
+}

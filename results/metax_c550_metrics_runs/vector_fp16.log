@@ -1,0 +1,33 @@
+/flagos/lib/python3.12/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:5: MetaX C550 | vendor=metax | Triton=maca/80 | compute units=104 | memory=63.6 GiB
+FlagGems 5.3.5, PyTorch 2.10.0+metax3.8.1.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+FP16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems metax device events
+          8    256      4       1         30    1.60427        8.701      8.705
+          8    256      4       4         30    1.56555        8.916      8.920
+          8    256      4       8         30    1.55659        8.967      8.970
+          8    256      8       1         32    3.13370        4.454      4.455
+          8    256      8       4         30    3.09517        4.510      4.511
+          8    256      8       8         30    3.08781        4.521      4.521
+          8    512      4       1         37    3.13952        8.892      8.893
+          8    512      4       4         37    3.09498        9.020      9.023
+          8    512      4       8         37    3.08461        9.051      9.052
+          8    512      8       1         30    3.13488        8.905      8.906
+          8    512      8       4         30    3.09773        9.012      9.014
+          8    512      8       8         30    3.08896        9.038      9.040
+         16    256      4       1         30    3.13978        8.891      8.893
+         16    256      4       4         30    3.09779        9.012      9.014
+         16    256      4       8         30    3.08826        9.040      9.041
+         16    256      8       1         32    6.20147        4.502      4.502
+         16    256      8       4         30    6.16192        4.531      4.531
+         16    256      8       8         30    6.15629        4.535      4.536
+         16    512      4       1         37    6.20672        8.996      8.998
+         16    512      4       4         37    6.15872        9.066      9.068
+         16    512      4       8         37    6.15091        9.077      9.081
+         16    512      8       1         30    6.20339        9.001      9.002
+         16    512      8       4         30    6.16474        9.057      9.059
+         16    512      8       8         30    6.15757        9.068      9.070
+Peak measured FP16 vector workload throughput: 9.081 TFLOP/s (median 9.077 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=4)
+JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/vector_fp16.json

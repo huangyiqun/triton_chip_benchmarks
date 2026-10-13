@@ -1,0 +1,28 @@
+/flagos/lib/python3.12/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:5: MetaX C550 | vendor=metax | Triton=maca/80 | compute units=104 | memory=63.6 GiB
+FlagGems 5.3.5, PyTorch 2.10.0+metax3.8.1.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, IEEE dot precision, two independent FP32 accumulator chains
+Instruction audit unavailable for metax; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems metax device events
+   32/32/32          1      4     0.8830    0.8830        15.81      15.81    69
+   32/32/32          2      4     1.6311    1.6306        17.12      17.12    69
+   32/32/32          4      4     3.1660    3.1658        17.64      17.64    69
+   32/32/32          8      4     6.2318    6.2310        17.92      17.92    69
+   32/64/32          1      4     1.6501    1.6500        16.92      16.92   103
+   32/64/32          2      4     3.1705    3.1655        17.61      17.64   103
+   32/64/32          4      4     6.2313    6.2309        17.92      17.92   103
+   32/64/32          8      4    12.3635   12.3620        18.06      18.07   103
+   64/32/32          1      4     0.8834    0.8833        31.60      31.60    73
+   64/32/32          2      4     1.6318    1.6301        34.22      34.25    73
+   64/32/32          4      4     3.1656    3.1617        35.28      35.32    73
+   64/32/32          8      4     6.2326    6.2276        35.83      35.86    73
+   64/64/32          1      4     1.6513    1.6512        33.81      33.81   105
+   64/64/32          2      4     3.1777    3.1774        35.14      35.14   105
+   64/64/32          4      4     6.2621    6.2612        35.66      35.67   105
+   64/64/32          8      4    12.4255   12.4247        35.95      35.95   105
+Measured IEEE FP32 matrix throughput: 35.95 TFLOP/s (same configuration median 35.95 TFLOP/s; best observed timing sample, dense ieee_fp32)
+JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_fp32.json

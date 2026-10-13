@@ -248,6 +248,54 @@ def _validate(c: torch.Tensor, reference: torch.Tensor,
                           else "FP32 torch.matmul under FlagGems full-precision context")}
 
 
+def _peak_tolerance(dtype: str, block_k: int, iterations: int) -> float:
+    """Bound the accumulated rounding error of the resident peak recurrence.
+
+    Peak operands are multiples of 1/16, so every exact dot entry is a multiple
+    of 1/256 with magnitude at most block_k/256, and an INT8 result in INT32
+    stays exact. For the floating formats the accumulator rounds once per dot
+    and those errors add linearly over the iterations, which bounds the total
+    by iterations * block_k/256 * unit_roundoff. The returned bound keeps a
+    safety factor and still stays orders of magnitude below 1/256, the smallest
+    difference a dropped iteration or a merged accumulator chain produces, so
+    the check continues to reject a kernel that skipped requested work.
+    """
+    if dtype == "int8":
+        return 0.0
+    unit_roundoff = 2.0**-53 if dtype == "fp64" else 2.0**-24
+    return 4.0 * iterations * block_k * (1.0 / 256.0) * unit_roundoff
+
+
+def _validate_peak(c: torch.Tensor, reference: torch.Tensor, dtype: str,
+                   block_k: int, iterations: int) -> dict:
+    """Check every resident-peak output against the exact scaled dot reference.
+
+    Demanding bit-exact equality here assumed the accumulator is the only
+    rounding step, which holds for an exactly representable FP32 partial sum but
+    not for a backend whose MMA rounds its own product internally: MetaX returns
+    BF16/FP16/TF32 results a few 2**-33 away from the exact lattice point. The
+    analytic bound keeps the measurement while staying far below any difference
+    a skipped operation would cause; see flagtree_metax_bug.md.
+    """
+    tolerance = _peak_tolerance(dtype, block_k, iterations)
+    torch.testing.assert_close(c, reference, rtol=0, atol=tolerance)
+    return {"passed": True, "max_abs_error": (c - reference).abs().max().item(),
+            "rtol": 0, "atol": tolerance,
+            "reference": f"exact {_accumulator_name(dtype).upper()} dot * iterations",
+            "tolerance_basis": ("exact INT32 equality" if dtype == "int8" else
+                                "accumulated accumulator unit roundoff over all iterations, "
+                                "far below the 1/256 exact-operand lattice step")}
+
+
+def _row_multiset_matches(actual: torch.Tensor, expected: torch.Tensor) -> bool:
+    """True when the expected rows are all present but in a different order."""
+    flat_actual = actual.reshape(-1, actual.shape[-1]).cpu().tolist()
+    flat_expected = expected.reshape(-1, expected.shape[-1]).cpu().tolist()
+    if len(flat_actual) != len(flat_expected):
+        return False
+    return sorted(map(tuple, flat_actual)) == sorted(map(tuple, flat_expected))
+
+
 def _normalize_precision_args(parser: argparse.ArgumentParser, args) -> None:
     """Resolve the FP32 dot policy without relying on a backend default."""
     args.requested_dtype = args.dtype
@@ -410,30 +458,46 @@ def _validate_fp32_precision(device, dot_input_precision: str,
 
 
 def _validate_fp64_precision(device, mode: str) -> dict:
-    """Reject a backend that accepts FP64 storage but computes in FP32."""
+    """Reject a backend that accepts FP64 storage but computes it incorrectly.
+
+    Two independent faults are checked. The precision rows carry 1+2^-40, which
+    an FP32 fallback cannot represent. The row-identity rows carry a distinct
+    value per row, which catches a backend that computes every product
+    correctly but delivers it to the wrong output row: with uniform rows such a
+    permutation is invisible, and MetaX has exactly that defect, so a
+    uniform-only probe passed and the sweep then failed its own output check
+    with no capability diagnosis. See flagtree_metax_bug.md.
+    """
     size = 32
-    config = {"block_m": size, "block_n": size, "block_k": 16,
+    inner = 16 if mode == "peak" else size
+    config = {"block_m": size, "block_n": size, "block_k": inner,
               "num_warps": 4, "num_stages": 1}
-    a = torch.full((size, size), 1.0 + 2.0**-40, dtype=torch.float64, device=device)
-    b = torch.eye(size, dtype=torch.float64, device=device)
+    # Column 0 distinguishes the rows; the FP64-only tail occupies the rest.
+    a = torch.full((size, inner), 1.0 + 2.0**-40, dtype=torch.float64, device=device)
+    a[:, 0] = torch.arange(1, size + 1, dtype=torch.float64, device=device)
+    b = torch.eye(inner, size, dtype=torch.float64, device=device)
     if mode == "peak":
-        # Resident tiles use K=16, so restrict the identity probe accordingly.
-        a = a[:, :16].contiguous()
-        b = b[:16, :].contiguous()
         c = torch.empty((2, 1, size, size), dtype=torch.float64, device=device)
         _launch_peak(a.unsqueeze(0), torch.stack((b, b)).unsqueeze(1), c, 1, config)
-        expected = torch.cat((a, torch.zeros_like(a)), dim=1)
-        expected = torch.stack((expected, expected)).unsqueeze(1)
     else:
-        c = torch.empty_like(a)
+        c = torch.empty((size, size), dtype=torch.float64, device=device)
         _launch(a, b, c, config)
-        expected = a
+    # b selects the first `inner` columns of A and zeroes the rest.
+    expected = torch.cat((a, torch.zeros((size, size - inner), dtype=torch.float64,
+                                         device=device)), dim=1)
+    if mode == "peak":
+        expected = torch.stack((expected, expected)).unsqueeze(1)
     error = (c - expected).abs().max().item()
     if error != 0.0:
+        permuted = _row_multiset_matches(c, expected)
+        detail = ("the returned rows are a permutation of the correct rows, so products are "
+                  "computed but written to the wrong output row"
+                  if permuted else f"probe error={error}")
         raise TensorUnsupportedError(
-            f"The backend did not preserve FP64 input/accumulator precision; probe error={error}")
+            f"The backend did not compute FP64 tl.dot correctly: {detail}")
     return {"passed": True, "max_abs_error": error, "kernel_mode": mode,
-            "description": "FP64 (1+2^-40) times identity; rejects FP32 fallback"}
+            "description": "FP64 (1+2^-40) with a per-row marker times identity; "
+                           "rejects FP32 fallback and permuted output rows"}
 
 
 def _validate_fp8_storage(device, dtype: torch.dtype) -> dict:
@@ -456,6 +520,53 @@ def _validate_fp8_storage(device, dtype: torch.dtype) -> dict:
     return {"passed": True, "max_abs_error": error,
             "probe_values": [1 / 16, -1 / 16, 1.0],
             "description": "FP8 E4M3FN storage round-trip of exactly representable values"}
+
+
+def _validate_dot_lowering(device, dtype: torch.dtype, dtype_name: str, mode: str,
+                           candidates: list[dict], dot_input_precision: str | None = None) -> dict:
+    """Compile a single-tile dot to confirm the backend lowers this format.
+
+    Holding a dtype in memory does not mean `tl.dot` has a lowering for it. The
+    MACA backend accepts FP8 tensors but fails in ConvertTritonGPUToLLVM with an
+    `i8`/`f32` element-type mismatch, and its `PassManager::run failed` carries
+    no dtype name, so the sweep could not classify it. Probing first turns that
+    into an explicit unsupported status instead of an unhandled traceback.
+
+    Every tile shape the sweep would try is probed, and only a format that no
+    shape can compile is rejected. A single hardcoded shape could fail for a
+    reason specific to that shape and wrongly discard a measurable format on a
+    backend whose MMA has different tile constraints.
+    """
+    failures = []
+    for config in candidates:
+        probe = {**config, "num_stages": 1}
+        m, n, k = probe["block_m"], probe["block_n"], probe["block_k"]
+        try:
+            a = torch.zeros((m, k), device=device).to(dtype)
+            b = torch.zeros((k, n), device=device).to(dtype)
+            if mode == "peak":
+                c = torch.empty((2, 1, m, n), dtype=_output_dtype(dtype), device=device)
+                _launch_peak(a.unsqueeze(0), torch.stack((b, b)).unsqueeze(1), c, 1,
+                             probe, dot_input_precision)
+            else:
+                c = torch.empty((m, n), dtype=_output_dtype(dtype), device=device)
+                _launch(a, b, c, probe, dot_input_precision)
+        except triton.OutOfResources as exc:
+            # A shape too large to launch says nothing about the dtype.
+            failures.append(f"{m}x{n}x{k}: resource limit ({exc})")
+            continue
+        except Exception as exc:
+            first_line = (str(exc).strip().splitlines()[0] if str(exc).strip()
+                          else type(exc).__name__)
+            failures.append(f"{m}x{n}x{k}: {first_line}")
+            continue
+        return {"passed": True, "kernel_mode": mode,
+                "probed_tile": f"{m}x{n}x{k}",
+                "rejected_tiles": failures,
+                "description": f"{dtype_name.upper()} tl.dot lowering probe"}
+    raise TensorUnsupportedError(
+        f"The backend cannot lower tl.dot for {dtype_name.upper()} operands at any "
+        f"tested tile shape: {'; '.join(failures)}")
 
 
 def _instruction_name(line: str) -> str:
@@ -669,7 +780,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                 continue
             reference = torch.stack((_reference(a, b[0]), _reference(a, b[1])))
             reference.mul_(args.iterations)
-            torch.testing.assert_close(c, reference, rtol=0, atol=0)
+            correctness = _validate_peak(c, reference, args.dtype, k, args.iterations)
             if info["spill_count"]:
                 rows.append({"mode": "peak", "dtype": args.dtype, "config": config,
                              "blocks_per_sm": blocks_per_sm, "status": "skipped",
@@ -708,9 +819,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                    "FP64 multiply and accumulation" if args.dtype == "fp64" else
                    "FP32 tensor accumulation",
                    "precision_probe": metadata.get("tensor_precision_probe"),
-                   "correctness": {"passed": True, "max_abs_error": 0.0,
-                                   "rtol": 0, "atol": 0,
-                                   "reference": f"exact {accumulator.upper()} dot * iterations"},
+                   "correctness": correctness,
                    "compiled": info, "status": "ok", **timing}
             rows.append(row)
             tile = f"{m}/{n}/{k}"
@@ -870,6 +979,12 @@ def main() -> None:
             metadata["tensor_precision_probe"] = _validate_fp64_precision(device, args.mode)
         elif args.dtype == "fp8":
             metadata["tensor_storage_probe"] = _validate_fp8_storage(device, dtype)
+            # Storage alone does not imply a dot lowering; probe before sweeping.
+            shapes = (_peak_configs(metadata["vendor_name"], args.dtype, args.input_precision)
+                      if args.mode == "peak"
+                      else _configs(metadata["vendor_name"], args.dtype))
+            metadata["tensor_dot_lowering_probe"] = _validate_dot_lowering(
+                device, dtype, args.dtype, args.mode, shapes, args.input_precision)
     except Exception as exc:
         reason = _unsupported_reason(exc)
         if reason is None:

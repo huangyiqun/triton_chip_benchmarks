@@ -38,6 +38,11 @@ DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
           "int8": torch.int8, "fp64": torch.float64,
           "fp8": getattr(torch, "float8_e4m3fn", None)}
 
+# Narrow float types that a backend may only be able to compute by extending to
+# FP32. For these, an explicitly widened FMA keeping the narrow state is a valid
+# fallback when tl.fma does not lower; see backend_supports_widened_fma.
+WIDENED_FMA_DTYPES = ("bf16", "fp16")
+
 # Typed INT8 arithmetic needs the explicit builtins to pass sanitize_overflow.
 # Some Triton/FlagTree versions do not re-export every one of them from
 # triton.language, so fall back to the same builtins in triton.language.core.
@@ -61,6 +66,35 @@ def _float_update(x, a, b, USE_EXPLICIT_FMA: tl.constexpr):
 
 
 @triton.jit
+def _widened_fma_update(x, a, b):
+    # `a` and `b` arrive already widened, so their conversions stay outside the
+    # loop. Only the accumulator is widened per iteration, and the result is
+    # rounded back to the narrow type so the state keeps that dtype. One
+    # rounding per update, matching tl.fma on backends that lower it natively.
+    return tl.fma(x.to(tl.float32), a, b).to(x.dtype)
+
+
+@triton.jit
+def _fma_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr):
+    # Operands are loaded at runtime so the probe cannot be constant-folded
+    # away before the backend has to lower a real fused multiply-add.
+    offsets = tl.arange(0, BLOCK_SIZE)
+    x = tl.load(Input + offsets)
+    a = tl.load(Input + offsets + BLOCK_SIZE)
+    b = tl.load(Input + offsets + 2 * BLOCK_SIZE)
+    tl.store(Output + offsets, tl.fma(x, a, b))
+
+
+@triton.jit
+def _widened_fma_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr):
+    offsets = tl.arange(0, BLOCK_SIZE)
+    x = tl.load(Input + offsets)
+    a = tl.load(Input + offsets + BLOCK_SIZE).to(tl.float32)
+    b = tl.load(Input + offsets + 2 * BLOCK_SIZE).to(tl.float32)
+    tl.store(Output + offsets, _widened_fma_update(x, a, b))
+
+
+@triton.jit
 def _dp4a_update(x, a, b):
     return tl.inline_asm_elementwise(
         "dp4a.s32.s32 $0, $1, $2, $3;", constraints="=r,r,r,r",
@@ -78,11 +112,13 @@ def _int8_mul_add_update(x, a, b):
 
 @triton.jit
 def _chain_step(x, a, b, IS_INT8: tl.constexpr, USE_DP4A: tl.constexpr,
-                USE_EXPLICIT_FMA: tl.constexpr):
+                USE_EXPLICIT_FMA: tl.constexpr, USE_WIDENED_FMA: tl.constexpr = False):
     if IS_INT8 and USE_DP4A:
         return _dp4a_update(x, a, b)
     if IS_INT8:
         return _int8_mul_add_update(x, a, b)
+    if USE_WIDENED_FMA:
+        return _widened_fma_update(x, a, b)
     return _float_update(x, a, b, USE_EXPLICIT_FMA)
 
 
@@ -91,7 +127,8 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                       ITERATIONS: tl.constexpr, BLOCK_SIZE: tl.constexpr,
                       UNROLL: tl.constexpr, USE_EXPLICIT_FMA: tl.constexpr,
                       IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False,
-                      FULLY_STATIC: tl.constexpr = False):
+                      FULLY_STATIC: tl.constexpr = False,
+                      USE_WIDENED_FMA: tl.constexpr = False):
     offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     # Runtime input loads keep all lanes and chains independent. Repeating a
     # formula every warp/program could let the compiler merge equal chains.
@@ -113,6 +150,21 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
     b6 = tl.load(Coefficients + 7)
     b7 = tl.load(Coefficients + 8)
 
+    if USE_WIDENED_FMA:
+        # Widen the loop-invariant coefficients once, here. A backend that
+        # emulates narrow arithmetic by extending to FP32 would otherwise
+        # re-extend them on every iteration; the MACA backend does not hoist
+        # those conversions itself. See flagtree_metax_bug.md.
+        a = a.to(tl.float32)
+        b0 = b0.to(tl.float32)
+        b1 = b1.to(tl.float32)
+        b2 = b2.to(tl.float32)
+        b3 = b3.to(tl.float32)
+        b4 = b4.to(tl.float32)
+        b5 = b5.to(tl.float32)
+        b6 = b6.to(tl.float32)
+        b7 = b7.to(tl.float32)
+
     if FULLY_STATIC:
         # No scf.for at all. The FlagTree XPU compiler fails to lower a loop
         # that carries sub-32-bit values across iterations (f16/bf16/i8 hit
@@ -120,14 +172,14 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
         # accepts for those types is a fully unrolled body. Code size grows
         # with ITERATIONS, which is why the caller lowers the iteration count.
         for _static in tl.static_range(ITERATIONS):
-            x0 = _chain_step(x0, a, b0, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x1 = _chain_step(x1, a, b1, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x2 = _chain_step(x2, a, b2, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x3 = _chain_step(x3, a, b3, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x4 = _chain_step(x4, a, b4, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x5 = _chain_step(x5, a, b5, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x6 = _chain_step(x6, a, b6, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
-            x7 = _chain_step(x7, a, b7, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA)
+            x0 = _chain_step(x0, a, b0, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x1 = _chain_step(x1, a, b1, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x2 = _chain_step(x2, a, b2, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x3 = _chain_step(x3, a, b3, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x4 = _chain_step(x4, a, b4, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x5 = _chain_step(x5, a, b5, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x6 = _chain_step(x6, a, b6, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x7 = _chain_step(x7, a, b7, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
     else:
         # Explicitly unroll a small group of iterations to amortize loop control.
         # The CLI requires exact divisibility, so each lane still executes exactly
@@ -155,6 +207,15 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                     x5 = _int8_mul_add_update(x5, a, b5)
                     x6 = _int8_mul_add_update(x6, a, b6)
                     x7 = _int8_mul_add_update(x7, a, b7)
+                elif USE_WIDENED_FMA:
+                    x0 = _widened_fma_update(x0, a, b0)
+                    x1 = _widened_fma_update(x1, a, b1)
+                    x2 = _widened_fma_update(x2, a, b2)
+                    x3 = _widened_fma_update(x3, a, b3)
+                    x4 = _widened_fma_update(x4, a, b4)
+                    x5 = _widened_fma_update(x5, a, b5)
+                    x6 = _widened_fma_update(x6, a, b6)
+                    x7 = _widened_fma_update(x7, a, b7)
                 else:
                     x0 = _float_update(x0, a, b0, USE_EXPLICIT_FMA)
                     x1 = _float_update(x1, a, b1, USE_EXPLICIT_FMA)
@@ -358,6 +419,68 @@ def _inspect_xpu_artifacts(compiled, dtype):
     return result
 
 
+_LLVM_ARITHMETIC_WIDTHS = {
+    "fp16": ("half", "f16"), "bf16": ("bfloat", "bf16"),
+    "fp32": ("float", "f32"), "fp64": ("double", "f64"),
+}
+
+
+def _inspect_maca_artifacts(compiled, dtype):
+    """Record which arithmetic width MetaX actually emits for this dtype.
+
+    The MACA backend ships no final-ISA disassembler here, so LLVM IR is the
+    last artifact available. It still answers the question that matters: a
+    BF16 kernel whose only arithmetic is `fmul float`/`fadd float` reached
+    FP32 execution units, which is not a native BF16 rate. IR is not final ISA
+    evidence, so this never sets native_arithmetic_verified.
+    """
+    artifacts = getattr(compiled, "asm", {})
+    llir = artifacts.get("llir", "")
+    llir = llir if isinstance(llir, str) else ""
+    result = {"maca_llir_available": bool(llir.strip()),
+              "native_arithmetic_verified": False}
+    if not llir.strip():
+        result["assembly_check"] = ("unavailable; the MACA backend exposed no LLVM IR, "
+                                    "so arithmetic width is unaudited")
+        return result
+    if dtype == "int8":
+        return result
+    llvm_type, _ = _LLVM_ARITHMETIC_WIDTHS[dtype]
+    arithmetic = sorted(set(re.findall(
+        r"\b(?:fmul|fadd|fsub)\s+(?:[a-z]+\s+)*(?:<\s*\d+\s+x\s+)?"
+        r"(half|bfloat|float|double)\b", llir)))
+    intrinsics = sorted(set(re.findall(
+        r"@llvm\.(?:mxc\.)?(?:pk\.)?(?:fma|fmuladd)\.[a-z0-9.]+", llir)))
+    result["maca_arithmetic_llvm_types"] = arithmetic
+    result["maca_arithmetic_intrinsics"] = intrinsics
+    # A narrow dtype computed in FP32 must round every result back. Counting
+    # those conversions shows the recurrence state really kept the narrow type
+    # instead of staying in FP32 and only converting once at the end.
+    if dtype in ("bf16", "fp16"):
+        narrow = "bf16" if dtype == "bf16" else "f16"
+        result["maca_narrowing_conversion_sites"] = len(re.findall(
+            r"@llvm\.mxc\.cvt\.(?:pk\.)?f32to" + narrow + r"\b", llir))
+    requested_present = llvm_type in arithmetic or any(
+        intrinsic.endswith(_LLVM_ARITHMETIC_WIDTHS[dtype][1]) for intrinsic in intrinsics)
+    wider = [found for found in arithmetic if found != llvm_type]
+    wider_intrinsics = [intrinsic for intrinsic in intrinsics
+                        if not intrinsic.endswith(_LLVM_ARITHMETIC_WIDTHS[dtype][1])]
+    if not requested_present and (wider or wider_intrinsics):
+        # Keep the measurement, but state plainly that the arithmetic was widened.
+        result["maca_arithmetic_promoted"] = True
+        result["assembly_check"] = (
+            f"unverified: MACA LLVM IR contains no {dtype.upper()} arithmetic; the kernel was "
+            f"promoted to {', '.join(wider + wider_intrinsics)}, so this is not a native "
+            f"{dtype.upper()} vector rate")
+    else:
+        result["maca_arithmetic_promoted"] = not requested_present
+        result["assembly_check"] = (
+            f"unverified: MACA LLVM IR keeps {dtype.upper()} arithmetic "
+            f"({', '.join(arithmetic + intrinsics) or 'no explicit arithmetic found'}), "
+            "but LLVM IR is not final ISA evidence of a native instruction")
+    return result
+
+
 def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
     """Check NVIDIA PTX; retain optional metadata on other FlagGems devices."""
     result = {"registers_per_thread": getattr(compiled, "n_regs", None),
@@ -373,6 +496,8 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
             "assembly_check": "unavailable; XPU register metadata is placeholder data",
         })
         result.update(_inspect_xpu_artifacts(compiled, dtype))
+    elif vendor_name == "metax" or backend == "maca":
+        result.update(_inspect_maca_artifacts(compiled, dtype))
     # Some non-NVIDIA runtimes also expose a backend named "cuda".
     elif vendor_name == "nvidia":
         ptx = compiled.asm["ptx"]
@@ -436,6 +561,63 @@ def needs_fully_static_loop(dtype, is_xpu):
     return bool(is_xpu) and dtype in XPU_NARROW_DTYPES
 
 
+def backend_supports_explicit_fma(dtype, device):
+    """Compile one tiny kernel to see whether `tl.fma` lowers for this dtype.
+
+    A backend can carry a dtype through loads, stores and `*`/`+` while having
+    no fused multiply-add lowering for it. On MetaX the BF16 `tl.fma` fails in
+    ConvertTritonGPUToLLVM because the backend represents BF16 as `i16`, which
+    `llvm.intr.fma` rejects. That is a missing fused-op lowering, not a missing
+    dtype, so the sweep falls back to source multiply plus add instead of
+    reporting the whole metric as unsupported. Returns the probe outcome and a
+    reason string for the JSON record.
+    """
+    torch_dtype = DTYPES[dtype]
+    if torch_dtype is None:
+        return False, f"This PyTorch build does not expose {dtype.upper()} storage"
+    block = 32
+    try:
+        probe_input = torch.ones((3 * block,), dtype=torch_dtype, device=device)
+        probe_output = torch.empty((block,), dtype=torch_dtype, device=device)
+        _fma_probe_kernel[(1,)](probe_input, probe_output, block, num_warps=4)
+    except Exception as exc:  # noqa: BLE001 - any lowering failure means no fused path
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        return False, (f"Backend cannot lower tl.fma for {dtype.upper()}; "
+                       f"using source multiply plus add: {first_line}")
+    finally:
+        probe_input = probe_output = None
+    return True, None
+
+
+def backend_supports_widened_fma(dtype, device):
+    """Compile a narrow-state/FP32-coefficient FMA probe for this dtype.
+
+    When a backend has no native arithmetic for a narrow float type it emulates
+    it by extending to FP32. `tl.fma` may still fail to lower (MetaX BF16), yet
+    an explicitly widened FMA whose result is rounded back to the narrow type
+    does lower, and it keeps the same one-rounding-per-update semantics that
+    `tl.fma` has elsewhere. Only offered for narrow float types: for FP32/FP64 a
+    widened FMA would either be a no-op or silently narrow the arithmetic.
+    """
+    if dtype not in WIDENED_FMA_DTYPES:
+        return False, None
+    torch_dtype = DTYPES[dtype]
+    if torch_dtype is None:
+        return False, f"This PyTorch build does not expose {dtype.upper()} storage"
+    block = 32
+    try:
+        probe_input = torch.ones((3 * block,), dtype=torch_dtype, device=device)
+        probe_output = torch.empty((block,), dtype=torch_dtype, device=device)
+        _widened_fma_probe_kernel[(1,)](probe_input, probe_output, block, num_warps=4)
+    except Exception as exc:  # noqa: BLE001 - any lowering failure rules the path out
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        return False, (f"Backend cannot lower an FP32-widened FMA for {dtype.upper()}: "
+                       f"{first_line}")
+    finally:
+        probe_input = probe_output = None
+    return True, None
+
+
 def configure_sweep(args, metadata):
     """Fill only unspecified tuning dimensions with backend-appropriate values."""
     is_xpu = is_flagtree_xpu(metadata)
@@ -476,12 +658,15 @@ def configure_sweep(args, metadata):
 
 def launch_vector(kernel, grid, inputs, output, coefficients, elements, iterations,
                   block_size, unroll, use_explicit_fma, num_warps,
-                  is_int8=False, use_dp4a=False, fully_static=False):
+                  is_int8=False, use_dp4a=False, fully_static=False,
+                  use_widened_fma=False):
     launch_options = {} if num_warps is None else {"num_warps": num_warps}
     if is_int8:
         launch_options.update(IS_INT8=True, USE_DP4A=use_dp4a)
     if fully_static:
         launch_options.update(FULLY_STATIC=True)
+    if use_widened_fma:
+        launch_options.update(USE_WIDENED_FMA=True)
     return kernel[grid](
         inputs, output, coefficients, elements, iterations, block_size, unroll,
         use_explicit_fma, **launch_options,
@@ -591,9 +776,24 @@ def run_benchmark(args, metadata, is_xpu):
     # cannot be audited, keep the numeric result but mark it unverified.
     int8_mul_add = is_int8 and not use_dp4a
     use_explicit_fma = not is_xpu and not is_int8
+    fma_fallback_reason = None
+    use_widened_fma = False
+    widened_fma_reason = None
+    if use_explicit_fma:
+        # Probe before the sweep: a backend may support the dtype everywhere
+        # except in a fused multiply-add. Falling back keeps a measurable
+        # source multiply/add path instead of discarding the metric.
+        use_explicit_fma, fma_fallback_reason = backend_supports_explicit_fma(args.dtype, device)
+        if not use_explicit_fma:
+            # tl.fma did not lower. Before settling for source multiply/add,
+            # try an FP32-widened FMA with narrow state: on a backend that
+            # emulates this dtype in FP32 anyway, that is the same arithmetic
+            # the native path would perform, with the invariant conversions
+            # hoisted out of the loop.
+            use_widened_fma, widened_fma_reason = backend_supports_widened_fma(args.dtype, device)
     fully_static = needs_fully_static_loop(args.dtype, is_xpu)
     source_operation = ("INT8_MUL_ADD_MOD256" if int8_mul_add else "DP4A") if is_int8 else (
-        "FMA" if use_explicit_fma else "MUL_ADD")
+        "FMA" if use_explicit_fma else "WIDENED_FMA" if use_widened_fma else "MUL_ADD")
     median_key, peak_key = ("tops", "peak_tops") if is_int8 else ("tflops", "peak_tflops")
     unit = "TOPS" if is_int8 else "TFLOP/s"
     print(f"{args.dtype.upper()} vector: {CHAINS} independent {source_operation} chains, "
@@ -607,6 +807,18 @@ def run_benchmark(args, metadata, is_xpu):
     elif is_xpu:
         print("XPU source uses multiply plus add for FlagTree vectorization; "
               "hardware fusion and native SIMD instructions are unverified")
+    if fma_fallback_reason:
+        print(fma_fallback_reason)
+        print("Hardware fusion is therefore unverified: the measured rate reflects the "
+              "source multiply/add workload, not a verified fused native peak")
+    if use_widened_fma:
+        print(f"Using an FP32-widened FMA with {args.dtype.upper()} state: one rounding per "
+              "update, and the loop-invariant coefficients are widened once outside the loop")
+        print("This is the arithmetic a backend without native "
+              f"{args.dtype.upper()} units performs anyway; it is still not a native "
+              f"{args.dtype.upper()} vector peak")
+    elif widened_fma_reason:
+        print(widened_fma_reason)
     if fully_static:
         print(f"Loop is fully unrolled: the FlagTree XPU compiler cannot lower an scf.for "
               f"carrying {args.dtype.upper()} state, so every iteration is emitted inline")
@@ -648,7 +860,7 @@ def run_benchmark(args, metadata, is_xpu):
                             vector_fma_kernel, (blocks,), inputs, output, coefficients,
                             elements, iterations, block_size, unroll_value,
                             use_explicit_fma, num_warps, is_int8, use_dp4a,
-                            fully_static,
+                            fully_static, use_widened_fma,
                         )
 
                     try:
@@ -687,13 +899,16 @@ def run_benchmark(args, metadata, is_xpu):
                     elif is_int8:
                         correctness = check_int8_output(inputs, output, coefficients, args.iterations)
                     else:
+                        # A widened FMA rounds once per update, like tl.fma, so
+                        # it earns the same single-rounding error bound.
+                        single_rounding = use_explicit_fma or use_widened_fma
                         correctness = check_output(inputs, output, coefficients, args.iterations,
-                                                   use_explicit_fma)
+                                                   single_rounding)
                         if args.dtype in ("bf16", "fp16") and args.iterations % 2 == 0:
                             output.fill_(float("nan"))
                             run(args.iterations + 1, 1)
                             check_output(inputs, output, coefficients, args.iterations + 1,
-                                         use_explicit_fma)
+                                         single_rounding)
                             correctness["odd_iteration_probe"] = "all elements passed"
                     timing = measure(run, args)
                     # Count only repeated arithmetic. Initialization, loop control,
@@ -714,6 +929,11 @@ def run_benchmark(args, metadata, is_xpu):
                         "loop_structure": "fully_static" if fully_static else "strip_mined",
                         "hardware_fusion_verified": bool(use_explicit_fma
                                                          and assembly["native_arithmetic_verified"]),
+                        "explicit_fma_supported": use_explicit_fma,
+                        "fma_fallback_reason": fma_fallback_reason,
+                        "widened_fma_used": use_widened_fma,
+                        "widened_fma_reason": widened_fma_reason,
+                        "roundings_per_update": 1 if (use_explicit_fma or use_widened_fma) else 2,
                         "accumulator_chains": CHAINS,
                         "iterations": args.iterations,
                         "blocks_per_sm": blocks_per_sm,
@@ -752,7 +972,8 @@ def run_benchmark(args, metadata, is_xpu):
         print("This numeric result measures the typed INT8 source workload; "
               "it is not a verified native INT8 vector peak")
     result_name = f"vector_{args.dtype}_" + ("dot4" if use_dp4a else
-                                            "fma" if use_explicit_fma else "mul_add")
+                                            "fma" if use_explicit_fma else
+                                            "widened_fma" if use_widened_fma else "mul_add")
     result_metadata = {**metadata, "vector_excluded_configurations": excluded}
     emit_results(result_name, result_metadata, args, rows)
 
