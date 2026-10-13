@@ -9,12 +9,12 @@ Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
  tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
 Timing: graph via FlagGems metax device events
    32/32/64          1      4     0.9876    0.9875        28.27      28.27    81
-   32/32/64          2      4     1.3907    1.3902        40.15      40.16    81
-   32/32/64          4      4     2.4125    2.4113        46.29      46.31    81
-   32/32/64          8      4     4.4588    4.4576        50.09      50.10    81
-   64/64/64          1      4     1.9015    1.9013        58.73      58.73   128
-   64/64/64          2      4     2.6607    2.6593        83.94      83.98   128
-   64/64/64          4      4     4.7096    4.7089        94.84      94.86   128
-   64/64/64          8      4     8.8174    8.8146       101.32     101.35   128
-Measured tl.dot throughput (native execution unverified): 101.35 TOPS (same configuration median 101.32 TOPS; best observed timing sample, dense int8)
+   32/32/64          2      4     1.3907    1.3901        40.15      40.17    81
+   32/32/64          4      4     2.4127    2.4120        46.28      46.30    81
+   32/32/64          8      4     4.4588    4.4581        50.09      50.10    81
+   64/64/64          1      4     1.9016    1.9014        58.72      58.73   128
+   64/64/64          2      4     2.6593    2.6577        83.99      84.03   128
+   64/64/64          4      4     4.7098    4.7076        94.84      94.88   128
+   64/64/64          8      4     8.8169    8.8150       101.32     101.34   128
+Measured tl.dot throughput (native execution unverified): 101.34 TOPS (same configuration median 101.32 TOPS; best observed timing sample, dense int8)
 JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_int8.json

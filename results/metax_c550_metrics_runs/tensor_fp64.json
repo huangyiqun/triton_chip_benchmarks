@@ -2,7 +2,7 @@
   "benchmark": "tensor",
   "status": "unsupported",
   "reason": "The backend did not compute FP64 tl.dot correctly: the returned rows are a permutation of the correct rows, so products are computed but written to the wrong output row",
-  "timestamp_utc": "2026-10-13T06:58:15.844400+00:00",
+  "timestamp_utc": "2026-10-13T07:19:43.544149+00:00",
   "device": {
     "device_index": 5,
     "device_type": "cuda",

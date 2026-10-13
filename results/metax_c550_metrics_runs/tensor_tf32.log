@@ -8,13 +8,13 @@ Instruction audit unavailable for metax; native tensor execution is unverified.
 Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
  tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
 Timing: graph via FlagGems metax device events
-   32/32/32          1      4     0.4969    0.4969        28.09      28.09    66
-   32/32/32          2      4     0.6589    0.6578        42.37      42.44    66
-   32/32/32          4      4     1.1905    1.1877        46.90      47.01    66
-   32/32/32          8      4     2.2281    2.2254        50.12      50.18    66
-   64/64/32          1      4     0.8562    0.8553        65.21      65.28   100
-   64/64/32          2      4     1.1392    1.1391        98.02      98.03   100
-   64/64/32          4      4     2.2500    2.2497        99.26      99.27   100
-   64/64/32          8      4     4.4316    4.4297       100.79     100.84   100
-Measured TF32 matrix throughput (execution unit unverified): 100.84 TFLOP/s (same configuration median 100.79 TFLOP/s; best observed timing sample, dense tf32)
+   32/32/32          1      4     0.4970    0.4969        28.09      28.09    66
+   32/32/32          2      4     0.6601    0.6592        42.29      42.35    66
+   32/32/32          4      4     1.1895    1.1865        46.94      47.06    66
+   32/32/32          8      4     2.2290    2.2255        50.10      50.18    66
+   64/64/32          1      4     0.8566    0.8553        65.18      65.28   100
+   64/64/32          2      4     1.1391    1.1389        98.03      98.05   100
+   64/64/32          4      4     2.2499    2.2495        99.27      99.28   100
+   64/64/32          8      4     4.4318    4.4305       100.79     100.82   100
+Measured TF32 matrix throughput (execution unit unverified): 100.82 TFLOP/s (same configuration median 100.79 TFLOP/s; best observed timing sample, dense tf32)
 JSON: /workspace/triton_chip_benchmarks/results/metax_c550_metrics_runs/tensor_tf32.json
