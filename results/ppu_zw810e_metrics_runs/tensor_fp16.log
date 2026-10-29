@@ -1,0 +1,51 @@
+Device cuda:8: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 5.3.0rc2, PyTorch 2.13.0, Triton 3.7.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp16 operands, two independent FP32 accumulator chains
+Instruction audit unavailable for thead; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+[2026-10-29 12:06:03:373727][ALINPU INFO]: [../../include/accontext.hpp:223][34m ACOMPUTE: [device caps] dev=8, name=PPU-ZW810E, sm8.0, smem=256KB, num_of_sm=64, freq_of_sm=0MHz[0m
+[33m[2026-10-29 12:06:03:946477][ALINPU WARNING]: [offline_cache.hpp:574]The set dir is not accessable: /PPU0010[0m
+[2026-10-29 12:06:03:946636][ALINPU INFO]: [offline_cache.hpp:583]Use root dir: /usr/local/PPU_SDK/rtccache/PPU0010
+[33m[2026-10-29 12:06:03:946717][ALINPU WARNING]: [offline_cache.hpp:574]The set dir is not accessable: /PPU0015[0m
+[2026-10-29 12:06:03:946749][ALINPU INFO]: [offline_cache.hpp:583]Use root dir: /usr/local/PPU_SDK/rtccache/PPU0015
+[33m[2026-10-29 12:06:03:946819][ALINPU WARNING]: [offline_cache.hpp:574]The set dir is not accessable: /PPU0017[0m
+[2026-10-29 12:06:03:946873][ALINPU INFO]: [offline_cache.hpp:583]Use root dir: /usr/local/PPU_SDK/rtccache/PPU0017
+[33m[2026-10-29 12:06:03:946930][ALINPU WARNING]: [offline_cache.hpp:574]The set dir is not accessable: /PPU0020[0m
+[2026-10-29 12:06:03:946983][ALINPU INFO]: [offline_cache.hpp:583]Use root dir: /usr/local/PPU_SDK/rtccache/PPU0020
+[2026-10-29 12:06:03:947100][ALINPU INFO]: [kernel_factory.cu:112]Pre-load kernel type: 0, hash: 3070850798, file: /usr/local/PPU_SDK/rtccache/PPU0010/2.2.0-663c22_3070850798_gemm_ktype1_aiu0_mtype0_dtypeFP64xFP64xFP64xFP64xFP64_tile32x64x16x16x8x2_layout0x0x0x0_align1x1x1x1_splitk0_fusion0_prefetch0_fp32tc0_ptrhost1_schedule0_algnBias0.bin
+[2026-10-29 12:06:03:947237][ALINPU INFO]: [kernel_factory.cu:112]Pre-load kernel type: 0, hash: 1332563819, file: /usr/local/PPU_SDK/rtccache/PPU0010/2.2.0-663c22_1332563819_gemm_ktype1_aiu1_mtype1_dtypeFP32xFP32xFP32xFP32xFP32_tile32x32x16x16x32x1_layout0x0x0x0_align1x1x2x2_splitk0_fusion0_prefetch0_fp32tc1_ptrhost1_schedule0_algnBias0.bin
+[2026-10-29 12:06:03:947255][ALINPU INFO]: [kernel_factory.cu:178]Rtc cache load all offline-cache done.
+
+Timing: graph via FlagGems thead device events
+  128/32/32          1      2     0.3609    0.3606        95.21      95.28   218
+  128/32/32          2      2     0.6293    0.6290       109.21     109.25   218
+  128/32/32          4      2     1.3307    1.3190       103.28     104.20   218
+  128/32/32          8      2     2.5201    2.5051       109.07     109.73   218
+  128/32/32         16      2     4.5412    4.4790       121.06     122.74   218
+  128/32/32         32      2     8.8081    8.7618       124.83     125.49   218
+  128/32/32         64      2    17.4822   17.1876       125.79     127.94   218
+  256/32/32          1      4     0.6303    0.6302       109.02     109.05   218
+  256/32/32          2      4     1.3545    1.3361       101.47     102.86   218
+  256/32/32          4      4     2.5061    2.5050       109.69     109.73   218
+  256/32/32          8      4     4.4517    4.4025       123.49     124.87   218
+  256/32/32         16      4     8.8966    8.8176       123.59     124.70   218
+  256/32/32         32      4    17.8276   17.4596       123.35     125.95   218
+  256/32/32         64      4    35.8509   35.4728       122.68     123.98   218
+  512/32/64          1      8     2.8774    2.8535        95.53      96.33   240
+  512/32/64          2      8     5.4082    5.2930       101.65     103.86   240
+  512/32/64          4      8     9.5339    9.4172       115.33     116.76   240
+  512/32/64          8      8    18.7403   18.6452       117.34     117.94   240
+  512/32/64         16      8    36.9402   35.9770       119.06     122.25   240
+  512/32/64         32      8    73.5649   70.6534       119.57     124.50   240
+  512/32/64         64      8   144.9229  141.8083       121.39     124.06   240
+  128/64/32          1      4     0.7764    0.7763        88.51      88.52   222
+  128/64/32          2      4     1.5459    1.5169        88.90      90.60   222
+  128/64/32          4      4     3.0442    3.0095        90.30      91.34   222
+  128/64/32          8      4     5.4245    5.4231       101.35     101.37   222
+  128/64/32         16      4    10.1490   10.0876       108.34     109.00   222
+  128/64/32         32      4    20.2016   20.1548       108.85     109.11   222
+  128/64/32         64      4    40.8420   40.2662       107.68     109.22   222
+Measured tl.dot throughput (native execution unverified): 127.94 TFLOP/s (same configuration median 125.79 TFLOP/s; best observed timing sample, dense fp16)
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/tensor_fp16.json

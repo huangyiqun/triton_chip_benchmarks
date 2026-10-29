@@ -1,0 +1,69 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "The backend cannot lower tl.dot for FP8 operands at any tested tile shape: 128x32x64: at 1:0:; 256x32x64: at 1:0:; 512x32x128: at 1:0:; 128x64x64: at 1:0:",
+  "timestamp_utc": "2026-10-29T04:08:28.858390+00:00",
+  "device": {
+    "device_index": 8,
+    "device_type": "cuda",
+    "device_name": "PPU-ZW810E",
+    "vendor_name": "thead",
+    "backend": "cuda",
+    "architecture": "80",
+    "sm_count": 64,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 102676561920,
+    "memory_capacity_gib": 95.625,
+    "l2_cache_bytes": 67108864,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.13.0",
+    "triton_version": "3.7.0",
+    "flaggems_version": "5.3.0rc2",
+    "device_api": "torch.cuda",
+    "input_format": "e4m3fn",
+    "input_storage_dtype": "e4m3fn",
+    "dot_input_precision": null,
+    "math_mode": "fp8",
+    "tensor_storage_probe": {
+      "passed": true,
+      "max_abs_error": 0.0,
+      "probe_values": [
+        0.0625,
+        -0.0625,
+        1.0
+      ],
+      "description": "FP8 E4M3FN storage round-trip of exactly representable values"
+    }
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp8",
+    "input_precision": null,
+    "quick": false,
+    "device": 8,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/tensor_fp8.json",
+    "requested_dtype": "fp8"
+  },
+  "results": []
+}

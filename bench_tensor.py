@@ -374,6 +374,23 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
                    (64, 32, k, 4), (64, 64, k, 4)]
     elif vendor in ("nvidia", "amd"):
         choices = [(64, 64, k, 4), (64, 128, k, 4), (128, 64, k, 4)]
+    elif vendor == "thead":
+        # T-Head PPU: the AIU executes m16n16k16/m16n16k8/m16n16k32 MMA
+        # instructions, but its throughput is governed by the accumulator
+        # footprint per warp. On PPU-ZW810E every shape holding
+        # block_m * block_n / num_warps == 2048 output elements reaches
+        # 120+ TFLOP/s FP16, while 4096 spills the register file (256 regs)
+        # and collapses to about 20. Narrow N is the secondary factor:
+        # N=32 measures above N=64, which measures above N=16 and N=128.
+        # The generic 32x32/64x64 set measures less than half the peak.
+        # IEEE FP32 and FP64 keep the SIMT tile sets of the branches above;
+        # FP64 needs them, since wide-M shapes spill its FP64 accumulators.
+        if dtype == "int8":
+            choices = [(256, 32, 128, 4), (256, 32, 64, 4),
+                       (128, 32, 64, 2), (128, 64, 64, 4)]
+        else:
+            choices = [(128, 32, k, 2), (256, 32, k, 4),
+                       (512, 32, 2 * k, 8), (128, 64, k, 4)]
     else:
         choices = [(32, 32, k, 4), (64, 64, k, 4)]
     return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
@@ -737,6 +754,12 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
         candidates = candidates[:1]
         args.blocks_per_sm = [1]
         args.iterations = min(args.iterations, 64)
+    blocks_per_sm_values = list(args.blocks_per_sm)
+    if vendor == "thead" and blocks_per_sm_values == [1, 2, 4, 8]:
+        # Default sweep: the PPU AIU keeps gaining with more resident CTAs
+        # per SM and plateaus around 16-32 blocks/SM (measured on
+        # PPU-ZW810E), so extend the default occupancy sweep for this vendor.
+        blocks_per_sm_values += [16, 32, 64]
     precision_text = (f"FP32 storage, {args.input_precision.upper()} dot precision"
                       if args.dtype == "fp32" else f"{args.dtype} operands")
     accumulator = _accumulator_name(args.dtype)
@@ -751,7 +774,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
     print(f" tile M/N/K  blocks/SM  warps  median ms    min ms  median {unit}  peak {unit}  regs")
     rows = []
     for config in candidates:
-        for blocks_per_sm in args.blocks_per_sm:
+        for blocks_per_sm in blocks_per_sm_values:
             blocks = blocks_per_sm * metadata["sm_count"]
             m, n, k = (config[f"block_{axis}"] for axis in ("m", "n", "k"))
             free_bytes = available_memory_bytes()

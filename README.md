@@ -55,6 +55,13 @@ python bench_suite.py --device 0 --timing events \
   --output results/p800_metrics.json
 ```
 
+T-Head PPU (FlagGems vendor `thead`, e.g. PPU-ZW810E):
+
+```bash
+python bench_suite.py --device 0 --timing auto \
+  --output results/ppu_zw810e_metrics.json
+```
+
 Other FlagGems-supported backends (replace the output name with your chip model):
 
 ```bash
@@ -124,7 +131,7 @@ Missing device properties are not filled with specifications from another chip. 
 - Peak-mode outputs are checked against the exact scaled dot reference with `rtol=0` and an analytic `atol` bounding the accumulated accumulator rounding (`4 × iterations × block_k / 256 × unit_roundoff`). INT8 keeps exact equality. At the 1024-iteration default the FP32-accumulator bound is 128× smaller than the `1/256` lattice step of the exact-fraction operands, so a single dropped iteration, a merged accumulator chain, or an unwritten output is still rejected. Bit-exact equality is not required because some backends round inside the MMA itself: MetaX returns BF16/FP16/TF32 results a few `2^-33` off the exact lattice point.
 - Formats whose `tl.dot` the backend cannot lower are reported as `unsupported` from a small compile probe run before the sweep, rather than aborting the metric. Holding a dtype in memory does not imply a dot lowering exists for it: MetaX stores FP8 exactly but fails to lower any FP8 `tl.dot`.
 - NVIDIA/AMD instruction audits distinguish matrix instructions from SIMT FMA and verify the requested FP16, BF16, FP32, TF32, INT8, FP64, or FP8 operand format. A kernel lowered to another dtype is rejected for that metric. Other vendors retain the validated measurement with suite status `unverified` when instruction precision or execution cannot be audited. Missing register/spill attributes are recorded as `null`.
-- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
+- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. The T-Head PPU backend instead sweeps four narrow-N shapes (`128×32` through `512×32`, plus `128×64`) with an extended `1..64 blocks/SM` occupancy sweep. Its throughput is governed by the accumulator footprint per warp: shapes holding `block_m × block_n / num_warps == 2048` output elements reach 120+ TFLOP/s FP16, while 4096 exhausts the 256-register file and collapses to about 20 TFLOP/s. Narrow N is the secondary factor (N=32 above N=64, above N=16 and N=128). The generic vendor set measures less than half of the achievable rate. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
 
 JSON records `input_storage_dtype`, `dot_input_precision`, and `math_mode` separately. Compiled-kernel metadata distinguishes `execution_kind`, `instruction_precision_verified`, and `native_tensor_verified`: a successful SIMT instruction audit does not imply tensor execution. Compare peak results within the same math mode and execution category.
 
@@ -266,6 +273,41 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 python bench_vector.py --quick --timing auto --warmup 2 --rep 5 --rounds 3
 python bench_vector.py --quick --timing events --warmup 2 --rep 5 --rounds 3
 ```
+
+### T-Head PPU (PPU-ZW810E) Complete Metric Table on 2026-10-29
+
+Full 15-metric suite on one idle PPU-ZW810E of sixteen (64 compute units, 95.6 GiB, 64 MiB L2) with PyTorch 2.13.0+v0.1.0.ppu2.2.0, Triton 3.7.0+v0.1.0.ppu2.2.0 (T-Head PPU backend), and FlagGems 5.3.0rc2+v0.1.0.ppu2.2.0 (vendor `thead`), with FlagGems graph execution and device-event timing. No metric ended in `error`.
+
+| Metric | Peak | Median | Unit | Status |
+| --- | ---: | ---: | --- | --- |
+| memory_capacity | 95.625 | - | GiB | `ok` |
+| memory_bandwidth | 2140.326 | 2138.425 | GB/s | `ok` |
+| tensor_bf16 | 127.197 | 125.710 | TFLOP/s | `unverified` |
+| tensor_fp16 | 128.803 | 125.896 | TFLOP/s | `unverified` |
+| tensor_fp32 | 27.264 | 26.444 | TFLOP/s | `unverified` |
+| tensor_tf32 | 59.031 | 58.688 | TFLOP/s | `unverified` |
+| tensor_int8 | 123.825 | 123.724 | TOP/s | `unverified` |
+| tensor_fp64 | 6.928 | 6.926 | TFLOP/s | `unverified` |
+| tensor_fp8 | - | - | TFLOP/s | `unsupported` |
+| vector_bf16 | 54.625 | 54.614 | TFLOP/s | `unverified` |
+| vector_fp16 | 55.336 | 55.328 | TFLOP/s | `unverified` |
+| vector_fp32 | 27.678 | 27.672 | TFLOP/s | `unverified` |
+| vector_int8 | 26.505 | 26.485 | TOP/s | `unverified` |
+| vector_fp64 | 6.423 | 6.420 | TFLOP/s | `unverified` |
+| vector_fp8 | - | - | TFLOP/s | `not_implemented` |
+
+Every compute row is `unverified` because no instruction auditor exists for vendor `thead`. The compiled LLVM IR shows the `tl.dot` lowerings: BF16/FP16 use `ppu.mma.sync.aligned.m16n16k16...f32.f16.f16.f32`, TF32 uses `ppu.mma.sync.aligned.m16n16k8...f32.tf32.tf32.f32`, and INT8 uses `ppu.mma.sync.aligned.m16n16k32...s32.s8.s8.s32` — all tensor-core (AIU) instructions. IEEE FP32 and FP64 `tl.dot` lower to SIMT `llvm.fmuladd`/`llvm.fma` instead, so those rows are matrix throughput at the SIMT ceiling, not tensor-core peaks. TF32 measures half the FP16 rate because the m16n16k8 instruction carries half the MACs of m16n16k16 at the same instruction rate.
+
+The PPU AIU throughput is governed by the accumulator footprint per warp, not by tile size alone. Every shape holding `block_m × block_n / num_warps == 2048` output elements measures 120+ TFLOP/s FP16 (`128×32×32` at 2 warps, `256×32×32` at 4, `512×32×64` at 8), while 4096 output elements per warp exhaust the 256-register file and collapse to about 20 TFLOP/s. Narrow N is the secondary factor: N=32 measures above N=64, which measures above N=16 and N=128. The generic vendor tile set (32×32 and 64×64 at up to 8 blocks/SM) measures 56 TFLOP/s FP16; the `thead` set reaches 129.2, which is 95% of the 135.3 TFLOP/s that the vendor's acblas library delivers through `torch.matmul` on the same card.
+
+FP64 keeps the generic small-tile set: its wider accumulators spill on the narrow-N shapes, where the measured rate drops from 6.8 to 1.6 TFLOP/s.
+
+```bash
+python bench_suite.py --device 0 --timing auto \
+  --output results/ppu_zw810e_metrics.json
+```
+
+Raw records: [complete table](results/ppu_zw810e_metrics.json), with per-metric JSON and logs in `results/ppu_zw810e_metrics_runs/`. Individual full sweeps: [FP16](results/ppu_peak_tensor_fp16.json), [BF16](results/ppu_peak_tensor_bf16.json), [TF32](results/ppu_peak_tensor_tf32.json), [INT8](results/ppu_peak_tensor_int8.json).
 
 ### MetaX C550 BF16 and FP32 Vector Measurements on 2026-10-13
 
