@@ -1,0 +1,37 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, IEEE dot precision, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems thead device events
+   32/32/32          1      4     1.3030    1.2988         6.59       6.61    64
+   32/32/32          2      4     1.3036    1.3034        13.18      13.18    64
+   32/32/32          4      4     1.7941    1.7916        19.15      19.18    64
+   32/32/32          8      4     3.3632    3.3625        20.43      20.44    64
+   32/32/32         16      4     6.7114    6.7090        20.48      20.49    64
+   32/32/32         32      4    13.4343   13.4218        20.46      20.48    64
+   32/32/32         64      4    26.8625   26.8388        20.47      20.48    64
+   32/64/32          1      4     2.0975    2.0972         8.19       8.19   110
+   32/64/32          2      4     2.0865    2.0754        16.47      16.56   110
+   32/64/32          4      4     2.9041    2.8901        23.66      23.78   110
+   32/64/32          8      4     5.2790    5.2723        26.04      26.07   110
+   32/64/32         16      4    10.5494   10.5328        26.06      26.10   110
+   32/64/32         32      4    21.1545   21.0438        25.99      26.12   110
+   32/64/32         64      4    42.2619   42.1570        26.02      26.08   110
+   64/32/32          1      4     2.0502    2.0496         8.38       8.38   118
+   64/32/32          2      4     2.0779    2.0749        16.54      16.56   118
+   64/32/32          4      4     3.2015    3.1997        21.46      21.48   118
+   64/32/32          8      4     5.7069    5.7043        24.08      24.09   118
+   64/32/32         16      4    11.4589   11.4222        23.99      24.07   118
+   64/32/32         32      4    23.2186   23.0927        23.68      23.81   118
+   64/32/32         64      4    46.9504   46.6869        23.42      23.55   118
+   64/64/32          1      4     3.6859    3.6849         9.32       9.32   164
+   64/64/32          2      4     3.4552    3.4525        19.89      19.90   164
+   64/64/32          4      4     5.2522    5.2467        26.17      26.20   164
+   64/64/32          8      4    13.4076   13.2434        20.50      20.76   164
+   64/64/32         16      4    22.8713   22.8613        24.04      24.05   164
+   64/64/32         32      4    43.0953   43.0856        25.51      25.52   164
+   64/64/32         64      4    83.1598   83.1517        26.44      26.45   164
+Measured IEEE FP32 matrix throughput: 26.45 TFLOP/s (same configuration median 26.44 TFLOP/s; best observed timing sample, dense ieee_fp32)
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/tensor_fp32.json

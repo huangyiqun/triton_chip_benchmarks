@@ -1,0 +1,31 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+BF16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems thead device events
+          8    256      4       1         32    0.15688       54.756     54.855
+          8    256      4       4         32    0.15684       54.767     54.853
+          8    256      4       8         32    0.15861       54.157     54.270
+          8    256      8       1         32    0.16184       53.077     53.087
+          8    256      8       4         32    0.16180       53.089     53.096
+          8    256      8       8         32    0.16182       53.083     53.093
+          8    512      4       1         32    0.31650       54.280     54.306
+          8    512      4       4         32    0.31402       54.710     54.725
+          8    512      4       8         32    0.31159       55.136     55.142
+          8    512      8       1         32    0.31865       53.915     53.927
+          8    512      8       4         32    0.31860       53.922     53.930
+          8    512      8       8         32    0.31281       54.920     54.925
+         16    256      4       1         32    0.31864       53.917     53.928
+         16    256      4       4         32    0.31863       53.917     53.930
+         16    256      4       8         32    0.31289       54.907     54.921
+         16    256      8       1         32    0.32180       53.388     53.400
+         16    256      8       4         32    0.32177       53.391     53.401
+         16    256      8       8         32    0.32178       53.390     53.400
+         16    512      4       1         32    0.62297       55.155     55.166
+         16    512      4       4         32    0.62227       55.217     55.230
+         16    512      4       8         32    0.62130       55.303     55.309
+         16    512      8       1         32    0.64857       52.978     53.461
+         16    512      8       4         32    0.64642       53.154     53.795
+         16    512      8       8         32    0.62257       55.190     55.201
+Peak measured BF16 vector workload throughput: 55.309 TFLOP/s (median 55.303 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=4)
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/vector_bf16.json

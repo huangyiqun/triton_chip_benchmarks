@@ -380,17 +380,24 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
         # footprint per warp. On PPU-ZW810E every shape holding
         # block_m * block_n / num_warps == 2048 output elements reaches
         # 120+ TFLOP/s FP16, while 4096 spills the register file (256 regs)
-        # and collapses to about 20. Narrow N is the secondary factor:
-        # N=32 measures above N=64, which measures above N=16 and N=128.
-        # The generic 32x32/64x64 set measures less than half the peak.
+        # and collapses to about 20.
+        # Like the nvidia/amd branch above, these shapes are shared across
+        # dtypes and only BLOCK_K varies with k: the best tile differs per
+        # dtype, so the sweep has to choose it rather than the vendor branch.
+        # Narrow N is the secondary factor, and it does not rank the same way
+        # for every dtype, because the MMA shape differs. FP16/BF16 issue
+        # m16n16k16 and peak at N=32 (128x32x32 measures 128 TFLOP/s, against
+        # 109 at N=16). INT8 issues m16n16k32, which carries twice the MACs
+        # per instruction but halves the issue rate at N=32 (7.4 G/s, down
+        # from 13.3 at N=16) and so cancels its own advantage: 256x16x64
+        # measures 218 TOP/s, against 121 at N=32. Keeping both widths in one
+        # list lets each dtype reach its own peak, and keeps the INT8:BF16
+        # ratio near the 2x the instruction shapes imply.
         # IEEE FP32 and FP64 keep the SIMT tile sets of the branches above;
         # FP64 needs them, since wide-M shapes spill its FP64 accumulators.
-        if dtype == "int8":
-            choices = [(256, 32, 128, 4), (256, 32, 64, 4),
-                       (128, 32, 64, 2), (128, 64, 64, 4)]
-        else:
-            choices = [(128, 32, k, 2), (256, 32, k, 4),
-                       (512, 32, 2 * k, 8), (128, 64, k, 4)]
+        choices = [(128, 32, k, 2), (256, 32, k, 4),
+                   (256, 16, k, 2), (128, 16, k, 1),
+                   (512, 32, 2 * k, 8), (128, 64, k, 4)]
     else:
         choices = [(32, 32, k, 4), (64, 64, k, 4)]
     return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
@@ -602,6 +609,54 @@ def _amd_matrix_format(line: str, accumulator: str, operand: str) -> bool:
     ) is not None
 
 
+# T-Head PPU emits no PTX: its AIU matrix ops reach LLVM IR as inline asm
+# ("ppu.mma.sync.aligned.<shape>.row.col[.satfinite].<acc>.<a>.<b>.<acc> {...}"),
+# so the audit reads "llir" and matches the operand/accumulator suffix the same
+# way the nvidia branch matches PTX .f32.bf16.bf16 forms. The mnemonic sits
+# inside the asm string rather than at the start of the line, so it is matched
+# directly instead of through _instruction_name.
+_PPU_MMA_RE = re.compile(r"ppu\.mma\.sync\.aligned\.[a-z0-9]+\.row\.col\.[a-z0-9.]+")
+# The SIMT path reaches LLVM IR as llvm.fmuladd, scalar or vectorized
+# (llvm.fmuladd.v16f32 in the peak kernel, llvm.fmuladd.f32 in the smaller
+# probes), so both spellings have to count as FP32/FP64 FMA evidence.
+_PPU_FMA_RE = re.compile(r"llvm\.fmuladd\.(?:v\d+)?f(32|64)\b")
+
+
+def _ppu_fma_width(line: str, bits: str) -> bool:
+    match = _PPU_FMA_RE.search(line)
+    return match is not None and match.group(1) == bits
+_PPU_MMA_FORMATS = {
+    "int8": ".s32.s8.s8.s32",
+    "fp8": ".f32.e4m3.e4m3.f32",
+    "bf16": ".f32.bf16.bf16.f32",
+    "fp16": ".f32.f16.f16.f32",
+    "tf32": ".f32.tf32.tf32.f32",
+    "fp32": ".f32.f32.f32.f32",
+    "fp64": ".f64.f64.f64.f64",
+}
+
+
+def _ppu_mma_mnemonic(line: str) -> str:
+    match = _PPU_MMA_RE.search(line)
+    return match.group(0).rstrip(".") if match else ""
+
+
+def _ppu_matrix_format(line: str, dtype_key: str) -> bool:
+    return _ppu_mma_mnemonic(line).endswith(_PPU_MMA_FORMATS[dtype_key])
+
+
+def _mnemonic(line: str, vendor: str) -> str:
+    """Instruction name for reporting; PPU hides its mnemonic inside inline asm
+    or an LLVM intrinsic call rather than at the start of the line."""
+    if vendor != "thead":
+        return _instruction_name(line)
+    mma = _ppu_mma_mnemonic(line)
+    if mma:
+        return mma
+    fma = _PPU_FMA_RE.search(line)
+    return fma.group(0) if fma else _instruction_name(line)
+
+
 def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                    dot_input_precision: str | None = None) -> dict:
     # Device type is not a vendor identifier: several FlagGems vendors expose
@@ -614,14 +669,20 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
     execution_kind = "unverified"
     instruction_precision_verified = False
     native_tensor_verified = False
-    if vendor in ("nvidia", "amd"):
-        assembly = assemblies.get("ptx" if vendor == "nvidia" else "amdgcn", "")
+    if vendor in ("nvidia", "amd", "thead"):
+        assembly = assemblies.get(
+            "ptx" if vendor == "nvidia" else "amdgcn" if vendor == "amd" else "llir", "")
         if vendor == "nvidia":
             tensor_lines = [line for line in assembly.splitlines()
                             if "mma.sync." in line or "wgmma.mma_async." in line
                             or "tcgen05.mma." in line]
             scalar_fp32_lines = [line for line in assembly.splitlines()
                                  if "fma.rn.f32" in line or "mad.rn.f32" in line]
+        elif vendor == "thead":
+            tensor_lines = [line for line in assembly.splitlines()
+                            if _PPU_MMA_RE.search(line)]
+            scalar_fp32_lines = [line for line in assembly.splitlines()
+                                 if _ppu_fma_width(line, "32")]
         else:
             tensor_lines = [line for line in assembly.splitlines()
                             if "v_mfma_" in line or "v_wmma_" in line]
@@ -632,9 +693,13 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
         if dtype == "fp64":
             scalar_fp64_lines = [line for line in assembly.splitlines()
                                  if ("fma.rn.f64" in line if vendor == "nvidia" else
+                                     _ppu_fma_width(line, "64") if vendor == "thead" else
                                      "v_fma_f64" in line)]
             correct_tensor = (all(".f64.f64.f64.f64" in line for line in tensor_lines)
                               if vendor == "nvidia" else
+                              all(_ppu_matrix_format(line, "fp64")
+                                  for line in tensor_lines)
+                              if vendor == "thead" else
                               all(_amd_matrix_format(line, "f64", "f64")
                                   for line in tensor_lines))
             if not correct_tensor or not (tensor_lines or scalar_fp64_lines):
@@ -648,7 +713,7 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                              if "tf32" in line.lower() or "xf32" in line.lower()]
             if dot_input_precision == "tf32":
                 if not tensor_lines or len(reduced_lines) != len(tensor_lines):
-                    instructions = sorted({_instruction_name(line) for line in tensor_lines})
+                    instructions = sorted({_mnemonic(line, vendor) for line in tensor_lines})
                     raise TensorUnsupportedError(
                         f"Cannot verify native TF32 matrix instructions for {vendor}; "
                         f"compiled tensor instructions: {instructions or 'none'}."
@@ -657,12 +722,17 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                 native_tensor_verified = True
             else:
                 if reduced_lines:
-                    instructions = sorted({_instruction_name(line) for line in reduced_lines})
+                    instructions = sorted({_mnemonic(line, vendor) for line in reduced_lines})
                     raise TensorUnsupportedError(
                         f"Requested IEEE FP32 but found reduced-precision instructions: {instructions}."
                     )
                 if vendor == "nvidia":
                     invalid_tensor_lines = tensor_lines
+                elif vendor == "thead":
+                    invalid_tensor_lines = [
+                        line for line in tensor_lines
+                        if not _ppu_matrix_format(line, "fp32")
+                    ]
                 else:
                     invalid_tensor_lines = [
                         line for line in tensor_lines
@@ -670,7 +740,7 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                     ]
                 if invalid_tensor_lines:
                     instructions = sorted(
-                        {_instruction_name(line) for line in invalid_tensor_lines}
+                        {_mnemonic(line, vendor) for line in invalid_tensor_lines}
                     )
                     raise TensorUnsupportedError(
                         f"Requested IEEE FP32 but found non-FP32 matrix instructions: "
@@ -693,24 +763,32 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
             if dtype == "fp8":
                 native_format = (all(".f32.e4m3.e4m3" in line for line in tensor_lines)
                               if vendor == "nvidia" else
+                              all(_ppu_matrix_format(line, "fp8") for line in tensor_lines)
+                              if vendor == "thead" else
                               all("fp8_fp8" in line for line in tensor_lines))
             elif dtype == "int8":
                 native_format = (all(".s32.s8.s8" in line for line in tensor_lines)
-                              if vendor == "nvidia" else all(
+                              if vendor == "nvidia" else
+                              all(_ppu_matrix_format(line, "int8") for line in tensor_lines)
+                              if vendor == "thead" else all(
                                   _amd_matrix_format(line, "i32", "i8")
                                   for line in tensor_lines))
             elif dtype == "bf16":
                 native_format = (all(".f32.bf16.bf16" in line for line in tensor_lines)
                                  if vendor == "nvidia" else
+                                 all(_ppu_matrix_format(line, "bf16") for line in tensor_lines)
+                                 if vendor == "thead" else
                                  all("bf16" in line for line in tensor_lines))
             elif dtype == "fp16":
                 native_format = (all(".f32.f16.f16" in line for line in tensor_lines)
                                  if vendor == "nvidia" else
+                                 all(_ppu_matrix_format(line, "fp16") for line in tensor_lines)
+                                 if vendor == "thead" else
                                  all("f16" in line and "bf16" not in line for line in tensor_lines))
             else:
                 native_format = True
             if not native_format:
-                instructions = sorted({_instruction_name(line) for line in tensor_lines})
+                instructions = sorted({_mnemonic(line, vendor) for line in tensor_lines})
                 raise TensorUnsupportedError(
                     f"Cannot verify native {dtype} MMA for {vendor}; compiled instructions: "
                     f"{instructions}. The selected target may not support this format "
@@ -718,8 +796,8 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                 )
             instruction_precision_verified = True
         audit = "verified"
-    instructions = sorted({_instruction_name(line) for line in tensor_lines})
-    scalar_fp32_instructions = sorted({_instruction_name(line) for line in scalar_fp32_lines})
+    instructions = sorted({_mnemonic(line, vendor) for line in tensor_lines})
+    scalar_fp32_instructions = sorted({_mnemonic(line, vendor) for line in scalar_fp32_lines})
     if audit == "verified" and execution_kind == "simt":
         note = f"{dtype.upper()} execution verified as scalar/vector FMA; no native tensor MMA"
     elif audit == "verified":
@@ -737,7 +815,7 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
             "tensor_instruction_types": instructions,
             "static_tensor_instruction_count": len(tensor_lines) if audit == "verified" else None,
             "fp32_fma_instruction_types": scalar_fp32_instructions,
-            "fp64_fma_instruction_types": sorted({_instruction_name(line) for line in scalar_fp64_lines}),
+            "fp64_fma_instruction_types": sorted({_mnemonic(line, vendor) for line in scalar_fp64_lines}),
             "static_fp32_fma_instruction_count": len(scalar_fp32_lines)
             if audit == "verified" else None}
 
@@ -768,7 +846,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
     if args.dtype == "fp8":
         print("FP8 E4M3FN: backend accumulation policy (internal precision is hardware-dependent); "
               "exact-check inputs")
-    if vendor not in ("nvidia", "amd"):
+    if vendor not in ("nvidia", "amd", "thead"):
         print(f"Instruction audit unavailable for {vendor}; native tensor execution is unverified.")
     print(f"Iterations={args.iterations}; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks")
     print(f" tile M/N/K  blocks/SM  warps  median ms    min ms  median {unit}  peak {unit}  regs")

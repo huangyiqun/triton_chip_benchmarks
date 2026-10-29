@@ -1,59 +1,9 @@
-Device cuda:8: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
-FlagGems 5.3.0rc2, PyTorch 2.13.0, Triton 3.7.0; timing=auto, warmup=100 ms, rep=200 ms
-Validation: masked tails passed; every measured output is checked in full.
-Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. GB/s and TB/s use decimal units; peak uses the shortest timed sample.
-mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s
-Timing: graph via FlagGems thead device events
-copy         256    1024      4    0.261487    0.261715     2053.15      2051.35
-read         256    1024      4    0.117948    0.118302     2278.11      2271.29
-copy         256    1024      8    0.258040    0.258331     2080.57      2078.23
-read         256    1024      8    0.119836    0.120382     2242.22      2232.04
-copy         256    4096      4    0.254235    0.254439     2111.71      2110.02
-read         256    4096      4    0.121600    0.121737     2208.07      2205.58
-copy         256    4096      8    0.256523    0.256680     2092.88      2091.60
-read         256    4096      8    0.122031    0.122155     2200.27      2198.04
-copy         256   16384      4    0.254585    0.254813     2108.81      2106.92
-read         256   16384      4    0.121389    0.121499     2211.50      2209.49
-copy         256   16384      8    0.254766    0.255036     2107.31      2105.08
-read         256   16384      8    0.120212    0.120385     2233.15      2229.95
-copy         512    1024      4    0.520958    0.521725     2061.09      2058.06
-read         512    1024      4    0.229646    0.233578     2340.10      2300.71
-copy         512    1024      8    0.517516    0.517940     2074.80      2073.10
-read         512    1024      8    0.242938    0.251818     2212.07      2134.06
-copy         512    4096      4    0.505076    0.506482     2125.90      2120.00
-read         512    4096      4    0.239388    0.239615     2243.23      2241.10
-copy         512    4096      8    0.511016    0.511831     2101.19      2097.84
-read         512    4096      8    0.239824    0.240444     2239.15      2233.37
-copy         512   16384      4    0.505909    0.506404     2122.40      2120.32
-read         512   16384      4    0.237948    0.238151     2256.39      2254.47
-copy         512   16384      8    0.504207    0.506442     2129.57      2120.17
-read         512   16384      8    0.236125    0.236516     2273.81      2270.05
-copy        1024    1024      4    1.036608    1.037028     2071.64      2070.81
-read        1024    1024      4    0.455530    0.459551     2359.43      2338.78
-copy        1024    1024      8    1.025136    1.026248     2094.83      2092.56
-read        1024    1024      8    0.484876    0.487204     2216.63      2206.04
-copy        1024    4096      4    1.008312    1.010064     2129.78      2126.09
-read        1024    4096      4    0.474878    0.475404     2261.64      2259.14
-copy        1024    4096      8    1.021704    1.022402     2101.86      2100.43
-read        1024    4096      8    0.477650    0.479080     2248.52      2241.81
-copy        1024   16384      4    1.008532    1.010244     2129.32      2125.71
-read        1024   16384      4    0.471130    0.471579     2279.22      2277.05
-copy        1024   16384      8    1.005232    1.006966     2136.31      2132.63
-read        1024   16384      8    0.468882    0.469221     2290.14      2288.49
-copy        2048    1024      4    2.078624    2.080604     2066.26      2064.29
-read        2048    1024      4    0.902400    0.914783     2382.07      2349.83
-copy        2048    1024      8    2.061288    2.063504     2083.63      2081.40
-read        2048    1024      8    0.952865    0.953629     2255.91      2254.11
-copy        2048    4096      4    2.010984    2.015652     2135.75      2130.81
-read        2048    4096      4    0.946305    0.947458     2269.89      2267.13
-copy        2048    4096      8    2.036296    2.038268     2109.21      2107.17
-read        2048    4096      8    0.954611    0.955778     2250.14      2247.39
-copy        2048   16384      4    2.012848    2.015724     2133.78      2130.73
-read        2048   16384      4    0.937440    0.938165     2290.94      2289.16
-copy        2048   16384      8    2.007792    2.009308     2139.15      2137.54
-read        2048   16384      8    0.933582    0.934276     2300.40      2298.69
-Best measured copy bandwidth: 2139.15 GB/s (2.139 TB/s), 2048 MiB/buffer, block=16384, warps=8.
-Best measured read bandwidth: 2382.07 GB/s (2.382 TB/s), 2048 MiB/buffer, block=1024, warps=4.
-Highest measured HBM-sized pattern: read, 2.382 TB/s (best observed timing, not a theoretical limit).
-These are effective bytes requested by the kernels; read includes a block reduction. Physical DRAM traffic and other access patterns can differ.
-JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/memory_bandwidth.json
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:34: UserWarning: [device_info] Failed to get current device, fallback to device_id=0.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:46: UserWarning: [device_info] Failed to get device properties for device_id=0, fallback to None.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:65: UserWarning: [device_info] Failed to get device capability for device_id=0 using torch_device_fn, fallback to (0, 0).
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/cuda/__init__.py:184: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 4: driver shutting down (Triggered internally at ../c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+FlagGems backend 'thead' has no available device

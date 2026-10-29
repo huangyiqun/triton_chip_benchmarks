@@ -1,0 +1,32 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 4096 iterations; 2 operations per update
+Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+Timing: graph via FlagGems thead device events
+          8    256      4       1         32    0.58310       14.732     14.739
+          8    256      4       4         32    0.34913       24.604     24.697
+          8    256      4       8         32    0.32505       26.426     26.495
+          8    256      8       1         32    0.40536       21.191     21.258
+          8    256      8       4         32    0.42762       20.088     20.144
+          8    256      8       8         32    0.33552       25.602     25.621
+          8    512      4       1         40    1.99201        8.624      8.629
+          8    512      4       4         40    0.79582       21.588     21.595
+          8    512      4       8         40    0.72699       23.632     23.635
+          8    512      8       1         32    1.17357       14.639     14.651
+          8    512      8       4         32    0.67074       25.613     25.618
+          8    512      8       8         32    0.62651       27.421     27.428
+         16    256      4       1         32    1.17366       14.638     14.657
+         16    256      4       4         32    0.67093       25.606     25.616
+         16    256      4       8         32    0.62673       27.412     27.420
+         16    256      8       1         32    0.80541       21.331     21.366
+         16    256      8       4         32    0.79889       21.505     21.509
+         16    256      8       8         32    0.71441       24.048     24.061
+         16    512      4       1         40    3.68813        9.316      9.332
+         16    512      4       4         40    1.60359       21.427     21.431
+         16    512      4       8         40    1.44434       23.789     23.796
+         16    512      8       1         32    2.32944       14.750     14.765
+         16    512      8       4         32    1.33813       25.677     25.684
+         16    512      8       8         32    1.24962       27.496     27.502
+Peak measured INT8 vector workload throughput: 27.502 TOPS (median 27.496 TOPS; blocks/unit=16, block=512, unroll=8, warps=8)
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/vector_int8.json

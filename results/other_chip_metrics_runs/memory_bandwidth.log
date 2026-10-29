@@ -1,0 +1,59 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+Validation: masked tails passed; every measured output is checked in full.
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. GB/s and TB/s use decimal units; peak uses the shortest timed sample.
+mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s
+Timing: graph via FlagGems thead device events
+copy         256    1024      4    0.261595    0.261902     2052.30      2049.89
+read         256    1024      4    0.115714    0.116118     2322.08      2313.99
+copy         256    1024      8    0.258065    0.258428     2080.37      2077.45
+read         256    1024      8    0.122859    0.123599     2187.04      2173.94
+copy         256    4096      4    0.254388    0.254570     2110.44      2108.93
+read         256    4096      4    0.122174    0.122256     2197.70      2196.22
+copy         256    4096      8    0.256689    0.256859     2091.52      2090.14
+read         256    4096      8    0.122678    0.122765     2188.66      2187.12
+copy         256   16384      4    0.255098    0.255295     2104.57      2102.94
+read         256   16384      4    0.120718    0.120783     2223.78      2222.60
+copy         256   16384      8    0.254559    0.255026     2109.03      2105.16
+read         256   16384      8    0.120433    0.120532     2229.05      2227.23
+copy         512    1024      4    0.521113    0.521934     2060.48      2057.24
+read         512    1024      4    0.229785    0.230595     2338.69      2330.47
+copy         512    1024      8    0.517880    0.518308     2073.34      2071.63
+read         512    1024      8    0.249656    0.251579     2152.54      2136.09
+copy         512    4096      4    0.506047    0.506654     2121.82      2119.28
+read         512    4096      4    0.240558    0.240748     2232.32      2230.56
+copy         512    4096      8    0.511142    0.511643     2100.67      2098.61
+read         512    4096      8    0.241931    0.242091     2219.65      2218.18
+copy         512   16384      4    0.506584    0.507594     2119.57      2115.35
+read         512   16384      4    0.237656    0.237861     2259.17      2257.22
+copy         512   16384      8    0.504560    0.505570     2128.08      2123.82
+read         512   16384      8    0.236389    0.236572     2271.27      2269.51
+copy        1024    1024      4    1.039916    1.040809     2065.06      2063.28
+read        1024    1024      4    0.453766    0.456804     2368.60      2352.85
+copy        1024    1024      8    1.029020    1.030308     2086.92      2084.31
+read        1024    1024      8    0.481669    0.484407     2231.39      2218.77
+copy        1024    4096      4    1.010424    1.011098     2125.33      2123.91
+read        1024    4096      4    0.477179    0.477613     2250.74      2248.69
+copy        1024    4096      8    1.020272    1.021476     2104.81      2102.33
+read        1024    4096      8    0.480368    0.480978     2235.80      2232.96
+copy        1024   16384      4    1.009412    1.011084     2127.46      2123.94
+read        1024   16384      4    0.470930    0.471236     2280.19      2278.70
+copy        1024   16384      8    1.006836    1.007856     2132.90      2130.74
+read        1024   16384      8    0.469194    0.469474     2288.62      2287.25
+copy        2048    1024      4    2.081160    2.082444     2063.74      2062.46
+read        2048    1024      4    0.899953    0.905836     2388.55      2373.03
+copy        2048    1024      8    2.067048    2.069584     2077.83      2075.28
+read        2048    1024      8    0.956218    0.959051     2248.00      2241.36
+copy        2048    4096      4    2.017808    2.018996     2128.53      2127.28
+read        2048    4096      4    0.950756    0.952111     2259.26      2256.05
+copy        2048    4096      8    2.037160    2.038136     2108.31      2107.30
+read        2048    4096      8    0.957851    0.958295     2242.53      2241.49
+copy        2048   16384      4    2.014112    2.015740     2132.44      2130.71
+read        2048   16384      4    0.937636    0.937976     2290.46      2289.63
+copy        2048   16384      8    2.008424    2.012808     2138.48      2133.82
+read        2048   16384      8    0.934353    0.934967     2298.51      2296.99
+Best measured copy bandwidth: 2138.48 GB/s (2.138 TB/s), 2048 MiB/buffer, block=16384, warps=8.
+Best measured read bandwidth: 2388.55 GB/s (2.389 TB/s), 2048 MiB/buffer, block=1024, warps=4.
+Highest measured HBM-sized pattern: read, 2.389 TB/s (best observed timing, not a theoretical limit).
+These are effective bytes requested by the kernels; read includes a block reduction. Physical DRAM traffic and other access patterns can differ.
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/memory_bandwidth.json

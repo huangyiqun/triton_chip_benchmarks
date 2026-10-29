@@ -1,0 +1,4 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+NOT_IMPLEMENTED: This benchmark has no implemented and verified native FP8 vector arithmetic path; FP8 storage, conversions, or tensor instructions do not measure native FP8 vector throughput. This does not determine chip support
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/vector_fp8.json

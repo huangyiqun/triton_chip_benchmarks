@@ -1,33 +1,9 @@
-Device cuda:8: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
-FlagGems 5.3.0rc2, PyTorch 2.13.0, Triton 3.7.0; timing=auto, warmup=100 ms, rep=200 ms
-INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 4096 iterations; 2 operations per update
-Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
-blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
-Timing: graph via FlagGems thead device events
-          8    256      4       1         32    0.58330       14.726     14.731
-          8    256      4       4         32    0.34356       25.003     25.167
-          8    256      4       8         32    0.33499       25.642     25.803
-          8    256      8       1         32    0.40543       21.187     21.226
-          8    256      8       4         32    0.42780       20.079     20.153
-          8    256      8       8         32    0.33565       25.592     25.614
-          8    512      4       1         40    1.99280        8.621      8.625
-          8    512      4       4         40    0.79605       21.581     21.590
-          8    512      4       8         40    0.72705       23.630     23.634
-          8    512      8       1         32    1.17392       14.635     14.651
-          8    512      8       4         32    0.65069       26.403     26.417
-          8    512      8       8         32    0.64967       26.444     26.460
-         16    256      4       1         32    1.17329       14.643     14.650
-         16    256      4       4         32    0.65078       26.399     26.411
-         16    256      4       8         32    0.64972       26.442     26.463
-         16    256      8       1         32    0.80467       21.350     21.367
-         16    256      8       4         32    0.79862       21.512     21.518
-         16    256      8       8         32    0.71426       24.053     24.075
-         16    512      4       1         40    3.68765        9.318      9.331
-         16    512      4       4         40    1.60321       21.432     21.437
-         16    512      4       8         40    1.44426       23.791     23.795
-         16    512      8       1         32    2.32882       14.754     14.776
-         16    512      8       4         32    1.29762       26.479     26.488
-         16    512      8       8         32    1.29707       26.490     26.514
-Peak measured INT8 vector workload throughput: 26.514 TOPS (median 26.490 TOPS; blocks/unit=16, block=512, unroll=8, warps=8)
-This numeric result measures the typed INT8 source workload; it is not a verified native INT8 vector peak
-JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/vector_int8.json
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:34: UserWarning: [device_info] Failed to get current device, fallback to device_id=0.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:46: UserWarning: [device_info] Failed to get device properties for device_id=0, fallback to None.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:65: UserWarning: [device_info] Failed to get device capability for device_id=0 using torch_device_fn, fallback to (0, 0).
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/cuda/__init__.py:184: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 4: driver shutting down (Triggered internally at ../c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+FlagGems backend 'thead' has no available device

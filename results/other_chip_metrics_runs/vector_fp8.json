@@ -2,9 +2,9 @@
   "benchmark": "vector_fp8",
   "status": "not_implemented",
   "reason": "This benchmark has no implemented and verified native FP8 vector arithmetic path; FP8 storage, conversions, or tensor instructions do not measure native FP8 vector throughput. This does not determine chip support",
-  "timestamp_utc": "2026-10-29T04:10:13.363566+00:00",
+  "timestamp_utc": "2026-10-29T09:45:04.179122+00:00",
   "device": {
-    "device_index": 8,
+    "device_index": 4,
     "device_type": "cuda",
     "device_name": "PPU-ZW810E",
     "vendor_name": "thead",
@@ -18,13 +18,13 @@
     "l2_cache_source": "device properties",
     "supports_fp64": true,
     "supports_bf16": true,
-    "torch_version": "2.13.0",
-    "triton_version": "3.7.0",
-    "flaggems_version": "5.3.0rc2",
+    "torch_version": "2.10.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "0.0+g2e0e5442b",
     "device_api": "torch.cuda"
   },
   "arguments": {
-    "device": 8,
+    "device": 4,
     "warmup": 100.0,
     "rep": 200.0,
     "timing": "auto",
@@ -32,7 +32,7 @@
     "rounds": 10,
     "compute_units": null,
     "l2_mib": null,
-    "output": "/mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/vector_fp8.json",
+    "output": "/mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/vector_fp8.json",
     "dtype": "fp8",
     "iterations": 4096,
     "blocks_per_sm": [

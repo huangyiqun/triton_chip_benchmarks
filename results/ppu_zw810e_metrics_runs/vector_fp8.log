@@ -1,4 +1,9 @@
-Device cuda:8: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
-FlagGems 5.3.0rc2, PyTorch 2.13.0, Triton 3.7.0; timing=auto, warmup=100 ms, rep=200 ms
-NOT_IMPLEMENTED: This benchmark has no implemented and verified native FP8 vector arithmetic path; FP8 storage, conversions, or tensor instructions do not measure native FP8 vector throughput. This does not determine chip support
-JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/vector_fp8.json
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:34: UserWarning: [device_info] Failed to get current device, fallback to device_id=0.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:46: UserWarning: [device_info] Failed to get device properties for device_id=0, fallback to None.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:65: UserWarning: [device_info] Failed to get device capability for device_id=0 using torch_device_fn, fallback to (0, 0).
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/cuda/__init__.py:184: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 4: driver shutting down (Triggered internally at ../c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+FlagGems backend 'thead' has no available device

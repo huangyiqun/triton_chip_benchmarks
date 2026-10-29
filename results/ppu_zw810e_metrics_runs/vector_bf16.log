@@ -1,31 +1,9 @@
-Device cuda:8: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
-FlagGems 5.3.0rc2, PyTorch 2.13.0, Triton 3.7.0; timing=auto, warmup=100 ms, rep=200 ms
-BF16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
-blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
-Timing: graph via FlagGems thead device events
-          8    256      4       1         32    0.16537       51.944     52.035
-          8    256      4       4         32    0.22323       38.480     38.489
-          8    256      4       8         32    0.18974       45.272     45.279
-          8    256      8       1         32    0.16197       53.033     53.046
-          8    256      8       4         32    0.16198       53.032     53.056
-          8    256      8       8         32    0.16198       53.031     53.041
-          8    512      4       1         32    0.32042       53.617     53.624
-          8    512      4       4         40    0.42382       40.536     40.548
-          8    512      4       8         40    0.36845       46.627     46.640
-          8    512      8       1         32    0.31627       54.320     54.329
-          8    512      8       4         32    0.44062       38.990     38.996
-          8    512      8       8         32    0.37580       45.715     45.725
-         16    256      4       1         32    0.31624       54.325     54.337
-         16    256      4       4         32    0.44066       38.987     38.994
-         16    256      4       8         32    0.37561       45.739     45.745
-         16    256      8       1         32    0.32093       53.531     53.555
-         16    256      8       4         32    0.32096       53.526     53.549
-         16    256      8       8         32    0.32097       53.525     53.552
-         16    512      4       1         32    0.63122       54.434     54.445
-         16    512      4       4         40    0.84862       40.489     40.495
-         16    512      4       8         40    0.73478       46.762     46.769
-         16    512      8       1         32    0.62912       54.615     54.624
-         16    512      8       4         32    0.87814       39.128     39.133
-         16    512      8       8         32    0.74842       45.909     45.916
-Peak measured BF16 vector workload throughput: 54.624 TFLOP/s (median 54.615 TFLOP/s; blocks/unit=16, block=512, unroll=1, warps=8)
-JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/ppu_zw810e_metrics_runs/vector_bf16.json
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:34: UserWarning: [device_info] Failed to get current device, fallback to device_id=0.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:46: UserWarning: [device_info] Failed to get device properties for device_id=0, fallback to None.
+  warnings.warn(
+/mnt/data/huangyiqun/FlagGems/src/flag_gems/utils/device_info.py:65: UserWarning: [device_info] Failed to get device capability for device_id=0 using torch_device_fn, fallback to (0, 0).
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/cuda/__init__.py:184: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 4: driver shutting down (Triggered internally at ../c10/cuda/CUDAFunctions.cpp:119.)
+  return torch._C._cuda_getDeviceCount() > 0
+FlagGems backend 'thead' has no available device

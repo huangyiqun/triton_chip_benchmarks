@@ -1,0 +1,23 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp64 operands, two independent FP64 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems thead device events
+   32/32/16          1      4     1.7985    1.7745         2.39       2.42   110
+   32/32/16          2      4     1.7027    1.7023         5.04       5.05   110
+   32/32/16          4      4     2.5588    2.5577         6.71       6.72   110
+   32/32/16          8      4     4.9614    4.9604         6.93       6.93   110
+   32/32/16         16      4    10.2259    9.9308         6.72       6.92   110
+   32/32/16         32      4    20.7776   20.1440         6.61       6.82   110
+   32/32/16         64      4    41.8641   41.7064         6.57       6.59   110
+   32/64/16          1      4     3.3774    3.3742         2.54       2.55   154
+   32/64/16          2      4     3.2067    3.2064         5.36       5.36   154
+   32/64/16          4      4     5.0379    5.0262         6.82       6.84   154
+   32/64/16          8      4    15.1456   14.9370         4.54       4.60   154
+   32/64/16         16      4    23.0744   23.0661         5.96       5.96   154
+   32/64/16         32      4    44.8293   44.5738         6.13       6.17   154
+   32/64/16         64      4    82.5388   82.4959         6.66       6.66   154
+Measured FP64 matrix throughput: 6.93 TFLOP/s (same configuration median 6.93 TFLOP/s; best observed timing sample, dense fp64)
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/tensor_fp64.json

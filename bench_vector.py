@@ -49,6 +49,11 @@ WIDENED_FMA_DTYPES = ("bf16", "fp16")
 _TL_MUL = getattr(tl, "mul", None) or tl.core.mul
 _TL_ADD = getattr(tl, "add", None) or tl.core.add
 
+# A vector benchmark must not execute on the matrix unit. The PPU spells its
+# AIU matrix ops as ppu.mma.* inline asm in LLVM IR, the way NVIDIA spells
+# them mma./wgmma./tcgen05. in PTX.
+_PPU_VECTOR_MMA_RE = re.compile(r"ppu\.mma\.")
+
 
 class UnsupportedVectorDtype(RuntimeError):
     """The requested arithmetic cannot be provided by this benchmark/backend."""
@@ -498,6 +503,43 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
         result.update(_inspect_xpu_artifacts(compiled, dtype))
     elif vendor_name == "metax" or backend == "maca":
         result.update(_inspect_maca_artifacts(compiled, dtype))
+    elif vendor_name == "thead":
+        # T-Head PPU emits no PTX; its vector arithmetic reaches LLVM IR as
+        # vectorized intrinsics (@llvm.fma.v16bf16 and friends). The checks
+        # mirror the nvidia branch: reject tensor instructions in a vector
+        # benchmark, require a native per-dtype FMA, and reject a dtype that
+        # the compiler promoted to FP32/FP64 instead of executing natively.
+        llir = (compiled.asm or {}).get("llir", "")
+        tensor_ops = bool(_PPU_VECTOR_MMA_RE.search(llir))
+        if tensor_ops:
+            raise RuntimeError("Generated LLVM IR contains tensor instructions in a vector benchmark")
+        if dtype == "int8":
+            # The PPU has no DP4A, so the INT8 path is typed multiply/add.
+            # Count the integer arithmetic that INT8_MUL_ADD_MOD256 lowers to.
+            instruction_count = len(re.findall(r"\bmul\b", llir))
+            instruction = "INT8 integer multiply/add (no DP4A on this target)"
+        else:
+            width = {"fp16": "f16", "bf16": "bf16", "fp32": "f32", "fp64": "f64"}[dtype]
+            instruction_count = len(re.findall(
+                rf"@llvm\.(?:fma|fmuladd)\.(?:v\d+)?{width}\b", llir))
+            instruction = f"{dtype.upper()} FMA"
+            if dtype in ("fp16", "bf16"):
+                promoted = re.search(r"@llvm\.(?:fma|fmuladd)\.(?:v\d+)?f(?:32|64)\b", llir)
+                if promoted or re.search(r"\bfpext\b", llir):
+                    raise UnsupportedVectorDtype(
+                        f"Compiler promotes {dtype.upper()} vector arithmetic to FP32/FP64; "
+                        "promoted arithmetic is not reported as the requested native peak")
+        if instruction_count == 0:
+            raise UnsupportedVectorDtype(
+                f"Generated LLVM IR does not contain native {instruction}")
+        result.update({
+            "llir_arithmetic_instruction_sites": instruction_count,
+            "llir_contains_tensor_instructions": tensor_ops,
+            "native_arithmetic_verified": True,
+            "assembly_check": f"passed ({instruction}; no tensor instructions)",
+        })
+        if dtype == "fp32":
+            result["llir_fp32_fma_instruction_sites"] = instruction_count
     # Some non-NVIDIA runtimes also expose a backend named "cuda".
     elif vendor_name == "nvidia":
         ptx = compiled.asm["ptx"]

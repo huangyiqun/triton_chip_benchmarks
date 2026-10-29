@@ -1,0 +1,4 @@
+Device cuda:4: PPU-ZW810E | vendor=thead | Triton=cuda/80 | compute units=64 | memory=95.6 GiB
+FlagGems 0.0+g2e0e5442b, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+UNSUPPORTED: The backend cannot lower tl.dot for FP8 operands at any tested tile shape: 128x32x64: at 1:0:; 256x32x64: at 1:0:; 256x16x64: at 1:0:; 128x16x64: at 1:0:; 512x32x128: at 1:0:; 128x64x64: at 1:0:
+JSON: /mnt/data/huangyiqun/triton_chip_benchmarks/results/other_chip_metrics_runs/tensor_fp8.json
