@@ -1,0 +1,41 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:5: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, TF32 dot precision, two independent FP32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems ascend device events
+   32/32/32          1      4     0.3201    0.3201        26.83      26.84     0
+   32/32/32          2      4     0.6365    0.6364        26.99      26.99     0
+   32/32/32          4      4     1.2693    1.2692        27.07      27.07     0
+   32/32/32          8      4     2.5346    2.5343        27.11      27.12     0
+   64/64/32          1      4     0.3432    0.3431       100.13     100.14     0
+   64/64/32          2      4     0.6822    0.6821       100.73     100.74     0
+   64/64/32          4      4     1.3603    1.3602       101.03     101.04     0
+   64/64/32          8      4     2.7163    2.7160       101.19     101.21     0
+ 128/128/64          1      4     1.2793    1.2792       214.87     214.89     0
+ 128/128/64          2      4     2.5537    2.5535       215.27     215.29     0
+ 128/128/64          4      4     5.1034    5.1027       215.45     215.47     0
+ 128/128/64          8      4    10.2126   10.2109       215.32     215.36     0
+ 256/128/64          1      4     2.5536    2.5533       215.29     215.31     0
+ 256/128/64          2      4     5.1024    5.1019       215.49     215.51     0
+ 256/128/64          4      4    10.2073   10.2063       215.44     215.46     0
+ 256/128/64          8      4    20.3980   20.3971       215.61     215.62     0
+ 128/256/64          1      4     2.5537    2.5534       215.28     215.31     0
+ 128/256/64          2      4     5.1027    5.1024       215.47     215.49     0
+ 128/256/64          4      4    10.2102   10.2089       215.37     215.40     0
+ 128/256/64          8      4    20.4016   20.4005       215.57     215.59     0
+Measured TF32 matrix throughput (execution unit unverified): 215.62 TFLOP/s (same configuration median 215.61 TFLOP/s; best observed timing sample, dense tf32)
+JSON: /workspace/triton_chip_benchmarks/results/950dt_metrics_runs/tensor_tf32.json

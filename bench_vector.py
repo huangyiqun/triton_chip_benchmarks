@@ -16,8 +16,8 @@ import triton.language as tl
 from triton.compiler.errors import CompilationError
 
 from common import (add_common_arguments, available_memory_bytes, emit_not_implemented,
-                    emit_results, emit_unsupported, get_device, is_flagtree_xpu, measure,
-                    positive_int, reference_device, setup_device)
+                    emit_results, emit_unsupported, get_device, get_device_api,
+                    is_flagtree_xpu, measure, positive_int, reference_device, setup_device)
 
 
 CHAINS = 8
@@ -91,6 +91,17 @@ def _fma_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr):
 
 
 @triton.jit
+def _fp8_probe_kernel(X, A, B, Output, BLOCK_SIZE: tl.constexpr):
+    # Operands are loaded at runtime so the multiply-add cannot be constant
+    # folded before the backend has to lower real FP8 arithmetic.
+    offsets = tl.arange(0, BLOCK_SIZE)
+    x = tl.load(X + offsets)
+    a = tl.load(A + offsets)
+    b = tl.load(B + offsets)
+    tl.store(Output + offsets, tl.fma(x, a, b))
+
+
+@triton.jit
 def _widened_fma_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr):
     offsets = tl.arange(0, BLOCK_SIZE)
     x = tl.load(Input + offsets)
@@ -133,7 +144,8 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                       UNROLL: tl.constexpr, USE_EXPLICIT_FMA: tl.constexpr,
                       IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False,
                       FULLY_STATIC: tl.constexpr = False,
-                      USE_WIDENED_FMA: tl.constexpr = False):
+                      USE_WIDENED_FMA: tl.constexpr = False,
+                      BROADCAST_COEFFICIENTS: tl.constexpr = False):
     offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     # Runtime input loads keep all lanes and chains independent. Repeating a
     # formula every warp/program could let the compiler merge equal chains.
@@ -145,15 +157,38 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
     x5 = tl.load(Input + offsets + 5 * ELEMENTS)
     x6 = tl.load(Input + offsets + 6 * ELEMENTS)
     x7 = tl.load(Input + offsets + 7 * ELEMENTS)
-    a = tl.load(Coefficients)
-    b0 = tl.load(Coefficients + 1)
-    b1 = tl.load(Coefficients + 2)
-    b2 = tl.load(Coefficients + 3)
-    b3 = tl.load(Coefficients + 4)
-    b4 = tl.load(Coefficients + 5)
-    b5 = tl.load(Coefficients + 6)
-    b6 = tl.load(Coefficients + 7)
-    b7 = tl.load(Coefficients + 8)
+    if BROADCAST_COEFFICIENTS:
+        # Read each loop-invariant coefficient from its own BLOCK_SIZE-wide
+        # run in an expanded buffer, instead of as a scalar. The host fills
+        # every run with a single repeated value, so the arithmetic below is
+        # unchanged; only the shape of the load differs.
+        #
+        # The Ascend bishengir compiler aborts with "LLVM ERROR: unsupported
+        # type cast" on FP8 whenever a coefficient reaches elementwise
+        # arithmetic at scalar shape. Re-reading one address as a vector
+        # (`Coefficients + (lanes - lanes)`) hits the same abort, so the
+        # operand has to come from genuinely contiguous memory. These loads
+        # stay outside the timed loop, so the measured work is the same.
+        lanes = tl.arange(0, BLOCK_SIZE)
+        a = tl.load(Coefficients + 0 * BLOCK_SIZE + lanes)
+        b0 = tl.load(Coefficients + 1 * BLOCK_SIZE + lanes)
+        b1 = tl.load(Coefficients + 2 * BLOCK_SIZE + lanes)
+        b2 = tl.load(Coefficients + 3 * BLOCK_SIZE + lanes)
+        b3 = tl.load(Coefficients + 4 * BLOCK_SIZE + lanes)
+        b4 = tl.load(Coefficients + 5 * BLOCK_SIZE + lanes)
+        b5 = tl.load(Coefficients + 6 * BLOCK_SIZE + lanes)
+        b6 = tl.load(Coefficients + 7 * BLOCK_SIZE + lanes)
+        b7 = tl.load(Coefficients + 8 * BLOCK_SIZE + lanes)
+    else:
+        a = tl.load(Coefficients)
+        b0 = tl.load(Coefficients + 1)
+        b1 = tl.load(Coefficients + 2)
+        b2 = tl.load(Coefficients + 3)
+        b3 = tl.load(Coefficients + 4)
+        b4 = tl.load(Coefficients + 5)
+        b5 = tl.load(Coefficients + 6)
+        b6 = tl.load(Coefficients + 7)
+        b7 = tl.load(Coefficients + 8)
 
     if USE_WIDENED_FMA:
         # Widen the loop-invariant coefficients once, here. A backend that
@@ -486,6 +521,63 @@ def _inspect_maca_artifacts(compiled, dtype):
     return result
 
 
+def _inspect_ascend_artifacts(compiled, dtype):
+    """Record which arithmetic width the Ascend backend keeps for this dtype.
+
+    triton-ascend emits MLIR (`ttir` before lowering, `bcmlir` after) and then
+    a `npubin` binary with no disassembler available here, so MLIR is the last
+    readable artifact. It still answers the question that matters: arithmetic
+    carrying `tensor<...xf8E4M3FN>` stayed in the narrow type, while a kernel
+    promoted to FP32 shows `tensor<...xf32>` arithmetic plus `arith.extf`
+    widening and an `arith.truncf` back. Both forms compute correct values and
+    only the IR distinguishes them.
+
+    MLIR is not final ISA evidence, so this never sets
+    native_arithmetic_verified; the suite reports such rows `unverified`.
+    """
+    artifacts = getattr(compiled, "asm", {})
+    mlir = artifacts.get("bcmlir", "") or artifacts.get("ttir", "")
+    mlir = mlir if isinstance(mlir, str) else ""
+    result = {"ascend_mlir_available": bool(mlir.strip()),
+              "native_arithmetic_verified": False}
+    if not mlir.strip():
+        result["assembly_check"] = ("unavailable; the Ascend backend exposed no MLIR, "
+                                    "so arithmetic width is unaudited")
+        return result
+    # The cube (matrix) unit is selected per kernel. A vector benchmark that
+    # reached it would not be measuring vector throughput.
+    mix_mode = re.findall(r'mix_mode\s*=\s*"(\w+)"', mlir)
+    result["ascend_mix_mode"] = mix_mode[0] if mix_mode else None
+    if any(mode == "aic" for mode in mix_mode):
+        raise RuntimeError(
+            "Ascend selected the cube/matrix unit (mix_mode=aic) in a vector benchmark")
+    if dtype == "int8":
+        return result
+    element = {"fp8": "f8E4M3FN", "fp16": "f16", "bf16": "bf16",
+               "fp32": "f32", "fp64": "f64"}[dtype]
+    arithmetic_re = r"(?:math\.fma|arith\.mulf|arith\.addf)[^\n]*?(?:tensor<[\dx]*|vector<[\dx]*)"
+    requested = len(re.findall(arithmetic_re + re.escape(element) + r"\b", mlir))
+    widened = [found for found in sorted(set(re.findall(
+        arithmetic_re + r"(f32|f64)\b", mlir))) if found != element]
+    result.update({"ascend_requested_arithmetic_sites": requested,
+                   "ascend_widened_arithmetic": widened,
+                   "ascend_extf_sites": len(re.findall(r"\barith\.extf\b", mlir))})
+    if requested == 0 and widened:
+        # Keep the measurement, but state plainly that the arithmetic widened.
+        result["ascend_arithmetic_promoted"] = True
+        result["assembly_check"] = (
+            f"unverified: Ascend MLIR contains no {dtype.upper()} arithmetic; the kernel was "
+            f"promoted to {', '.join(widened)}, so this is not a native "
+            f"{dtype.upper()} vector rate")
+    else:
+        result["ascend_arithmetic_promoted"] = requested == 0
+        result["assembly_check"] = (
+            f"unverified: Ascend MLIR keeps {dtype.upper()} arithmetic "
+            f"({requested} site(s) on {element}), but MLIR is not final ISA "
+            "evidence of a native instruction")
+    return result
+
+
 def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
     """Check NVIDIA PTX; retain optional metadata on other FlagGems devices."""
     result = {"registers_per_thread": getattr(compiled, "n_regs", None),
@@ -503,6 +595,8 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
         result.update(_inspect_xpu_artifacts(compiled, dtype))
     elif vendor_name == "metax" or backend == "maca":
         result.update(_inspect_maca_artifacts(compiled, dtype))
+    elif vendor_name == "ascend" or backend == "npu":
+        result.update(_inspect_ascend_artifacts(compiled, dtype))
     elif vendor_name == "thead":
         # T-Head PPU emits no PTX; its vector arithmetic reaches LLVM IR as
         # vectorized intrinsics (@llvm.fma.v16bf16 and friends). The checks
@@ -619,7 +713,7 @@ def backend_supports_explicit_fma(dtype, device):
         return False, f"This PyTorch build does not expose {dtype.upper()} storage"
     block = 32
     try:
-        probe_input = torch.ones((3 * block,), dtype=torch_dtype, device=device)
+        probe_input = _filled((3 * block,), 1.0, torch_dtype, device)
         probe_output = torch.empty((block,), dtype=torch_dtype, device=device)
         _fma_probe_kernel[(1,)](probe_input, probe_output, block, num_warps=4)
     except Exception as exc:  # noqa: BLE001 - any lowering failure means no fused path
@@ -629,6 +723,77 @@ def backend_supports_explicit_fma(dtype, device):
     finally:
         probe_input = probe_output = None
     return True, None
+
+
+def _filled(shape, value, torch_dtype, device):
+    """Allocate a tensor holding `value` without relying on a typed fill.
+
+    `torch.ones`/`torch.full`/`Tensor.fill_` go through aclnnInplaceFillScalar
+    on Ascend, which rejects float8_e4m3fn even though the same device holds
+    and converts FP8 fine. Building the value in FP32 and converting keeps the
+    requested dtype and works on every backend, so this is not a vendor
+    branch. Only used for untimed probe and sentinel buffers.
+    """
+    return torch.full(shape, value, device=device).to(torch_dtype)
+
+
+def _fill_sentinel(tensor, value):
+    """Overwrite `tensor` with `value` through a copy instead of a typed fill.
+
+    Same reason as `_filled`: the in-place scalar fill has no FP8 kernel on
+    Ascend, while `copy_` from an FP32 source does. The sentinel marks the
+    output buffer before each timed launch so an unwritten element is caught.
+    """
+    tensor.copy_(torch.full(tensor.shape, value, device=tensor.device))
+
+
+@triton.jit
+def _scalar_coefficient_probe_kernel(X, A, B, Output, BLOCK_SIZE: tl.constexpr):
+    # Mirrors `vector_fma_kernel`'s use of a scalar (0-D) coefficient feeding
+    # elementwise arithmetic, which is what distinguishes it from the other
+    # probes: those load coefficients at the same shape as the data.
+    offsets = tl.arange(0, BLOCK_SIZE)
+    x = tl.load(X + offsets)
+    a = tl.load(A)
+    b = tl.load(B)
+    tl.store(Output + offsets, tl.fma(x, a, b))
+
+
+def needs_broadcast_coefficients(dtype, device):
+    """Detect a backend that cannot lower scalar coefficients for this dtype.
+
+    The Ascend bishengir compiler aborts with "LLVM ERROR: unsupported type
+    cast" when an FP8 scalar is combined with an FP8 vector, while the same
+    arithmetic with a vector-shaped (broadcast) coefficient compiles and runs.
+    That is a backend lowering defect, not a hardware property, so it is
+    discovered by compiling rather than by naming the vendor: a backend that
+    lowers the scalar form keeps using it. Returns (needed, reason).
+    """
+    torch_dtype = DTYPES[dtype]
+    if torch_dtype is None:
+        return False, None
+    block = 32
+    try:
+        api = get_device_api()
+    except (ImportError, ModuleNotFoundError, SystemExit):
+        # No device runtime to probe: keep the default scalar form rather than
+        # changing behaviour on the strength of a probe that never ran.
+        return False, None
+    try:
+        probe_input = _filled((block,), 1.0, torch_dtype, device)
+        probe_a = _filled((1,), 0.5, torch_dtype, device)
+        probe_b = _filled((1,), 0.25, torch_dtype, device)
+        probe_output = torch.empty((block,), dtype=torch_dtype, device=device)
+        _scalar_coefficient_probe_kernel[(1,)](probe_input, probe_a, probe_b,
+                                               probe_output, BLOCK_SIZE=block)
+        api.synchronize()
+    except Exception as exc:  # noqa: BLE001 - a failure here is a lowering gap
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        crash = "unsupported type cast" in str(exc)
+        return True, (f"Backend cannot compile scalar coefficients for {dtype.upper()}"
+                      f"{' (compiler abort: unsupported type cast)' if crash else ''}; "
+                      f"coefficients are loaded as broadcast vectors instead: {first_line[:160]}")
+    return False, None
 
 
 def backend_supports_widened_fma(dtype, device):
@@ -648,7 +813,7 @@ def backend_supports_widened_fma(dtype, device):
         return False, f"This PyTorch build does not expose {dtype.upper()} storage"
     block = 32
     try:
-        probe_input = torch.ones((3 * block,), dtype=torch_dtype, device=device)
+        probe_input = _filled((3 * block,), 1.0, torch_dtype, device)
         probe_output = torch.empty((block,), dtype=torch_dtype, device=device)
         _widened_fma_probe_kernel[(1,)](probe_input, probe_output, block, num_warps=4)
     except Exception as exc:  # noqa: BLE001 - any lowering failure rules the path out
@@ -682,7 +847,12 @@ def configure_sweep(args, metadata):
         # miscompiles into non-finite results that output validation rejects.
         # 1024 is exact for both.
         xpu_blocks = [1024] if args.dtype in ("int8", "bf16") else [1024, 2048]
-        args.block_sizes = args.block_sizes or (xpu_blocks if is_xpu else [256, 512])
+        # 256/512 elements per program leaves some vector units short of a full
+        # issue window: on Ascend950DT BF16 measures 7.41 TFLOP/s at 512 and
+        # 8.89 at 2048. 4096 is past the ceiling there, where the kernel stops
+        # compiling for want of unified-buffer space, so the sweep stops at
+        # 2048 and the larger sizes stay available through --block-sizes.
+        args.block_sizes = args.block_sizes or (xpu_blocks if is_xpu else [256, 512, 1024, 2048])
         if is_xpu:
             if args.num_warps is not None:
                 print("FlagTree XPU does not use Triton num_warps; ignoring --num-warps")
@@ -694,14 +864,14 @@ def configure_sweep(args, metadata):
         if fully_static:
             args.unroll = [1]
         else:
-            args.unroll = args.unroll or ([1, 4] if is_xpu else [1, 4, 8])
+            args.unroll = args.unroll or ([1, 4] if is_xpu else [1, 4, 8, 16])
     return is_xpu
 
 
 def launch_vector(kernel, grid, inputs, output, coefficients, elements, iterations,
                   block_size, unroll, use_explicit_fma, num_warps,
                   is_int8=False, use_dp4a=False, fully_static=False,
-                  use_widened_fma=False):
+                  use_widened_fma=False, broadcast_coefficients=False):
     launch_options = {} if num_warps is None else {"num_warps": num_warps}
     if is_int8:
         launch_options.update(IS_INT8=True, USE_DP4A=use_dp4a)
@@ -709,6 +879,8 @@ def launch_vector(kernel, grid, inputs, output, coefficients, elements, iteratio
         launch_options.update(FULLY_STATIC=True)
     if use_widened_fma:
         launch_options.update(USE_WIDENED_FMA=True)
+    if broadcast_coefficients:
+        launch_options.update(BROADCAST_COEFFICIENTS=True)
     return kernel[grid](
         inputs, output, coefficients, elements, iterations, block_size, unroll,
         use_explicit_fma, **launch_options,
@@ -725,14 +897,96 @@ def unsupported_dtype_reason(dtype, metadata):
     return None
 
 
-def not_implemented_dtype_reason(dtype):
-    if dtype == "fp8":
-        # FP8 tensor-core/storage support does not establish native elementwise
-        # FP8 arithmetic. Do not publish widened math as an FP8 vector peak.
-        return ("This benchmark has no implemented and verified native FP8 vector arithmetic "
-                "path; FP8 storage, conversions, or tensor instructions do not measure native "
-                "FP8 vector throughput. This does not determine chip support")
-    return None
+_FP8_VECTOR_REJECTION = (
+    "This benchmark has no implemented and verified native FP8 vector arithmetic "
+    "path; FP8 storage, conversions, or tensor instructions do not measure native "
+    "FP8 vector throughput. This does not determine chip support")
+
+
+def _fp8_native_elementwise_probe(device):
+    """Compile a real FP8 multiply-add and report whether it stayed in FP8.
+
+    FP8 storage or FP8 tensor-core support does not imply native elementwise
+    FP8 arithmetic, so the benchmark refuses the metric unless this probe
+    shows the compiler both accepted FP8 operands and emitted arithmetic that
+    is still typed FP8. A backend that silently widens to FP32 is rejected
+    here: its rate would be an FP32 rate wearing an FP8 label.
+
+    Returns (supported, detail). Any compilation or runtime failure means the
+    backend has no such path, which is reported, not raised.
+    """
+    dtype = DTYPES["fp8"]
+    if dtype is None:
+        return False, "this PyTorch build does not expose FP8 storage"
+    size = 256
+    try:
+        x = torch.full((size,), 0.5, device=device).to(dtype)
+        a = torch.full((size,), 0.5, device=device).to(dtype)
+        b = torch.full((size,), 0.25, device=device).to(dtype)
+        out = torch.zeros((size,), device=device).to(dtype)
+        compiled = _fp8_probe_kernel[(1,)](x, a, b, out, BLOCK_SIZE=size)
+        get_device_api().synchronize()
+    except Exception as exc:
+        first = (str(exc).strip().splitlines() or [type(exc).__name__])[0]
+        return False, f"the backend cannot compile FP8 elementwise multiply-add: {first[:200]}"
+    # 0.5*0.5+0.25 = 0.5 is exact in E4M3FN, so a correct native or widened
+    # path both return it; this only rejects a path that does not compute.
+    produced = out.float()
+    if not torch.equal(produced, torch.full_like(produced, 0.5)):
+        return False, (f"the FP8 elementwise probe returned {produced[0].item()} "
+                       "instead of the exact value 0.5")
+    artifacts = getattr(compiled, "asm", {}) or {}
+    mlir = artifacts.get("bcmlir", "") or artifacts.get("ttir", "")
+    if not isinstance(mlir, str) or not mlir.strip():
+        return False, ("the backend exposes no readable IR for the FP8 probe, so native "
+                       "FP8 arithmetic cannot be distinguished from widened FP32 math")
+    narrow = re.search(r"(?:math\.fma|arith\.mulf|arith\.addf)[^\n]*f8E4M3FN\b", mlir)
+    if not narrow:
+        return False, ("the compiler did not keep FP8 arithmetic for an FP8 multiply-add; "
+                       "widened arithmetic is not reported as a native FP8 vector rate")
+    return True, "FP8 multiply-add compiles and its IR arithmetic is still typed FP8"
+
+
+def not_implemented_dtype_reason(dtype, device=None):
+    """Report why a dtype has no implemented path, or None if it has one.
+
+    `device` may be a device or a zero-argument callable returning one. The
+    callable form keeps this usable before any accelerator runtime is loaded:
+    it is only invoked for a dtype whose decision needs a compile probe.
+    """
+    if dtype != "fp8":
+        return None
+    # FP8 tensor-core/storage support does not establish native elementwise
+    # FP8 arithmetic. Do not publish widened math as an FP8 vector peak.
+    # Without a device to probe, keep the unconditional refusal.
+    if device is None:
+        return _FP8_VECTOR_REJECTION
+    try:
+        target = device() if callable(device) else device
+    except (ImportError, ModuleNotFoundError, RuntimeError, AttributeError, SystemExit) as exc:
+        # No reachable device runtime means no FP8 path can be established.
+        # `common.get_flag_gems` raises SystemExit when no backend is installed.
+        return f"{_FP8_VECTOR_REJECTION} (probe: the device is unreachable: {exc})"
+    supported, detail = _fp8_native_elementwise_probe(target)
+    if supported:
+        return None
+    return f"{_FP8_VECTOR_REJECTION} (probe: {detail})"
+
+
+def _expand_coefficients(coefficients, block_size):
+    """Repeat each coefficient into its own `block_size`-wide run.
+
+    `vector_fma_kernel` reads coefficients this way when the backend cannot
+    lower scalar operands for the dtype (see BROADCAST_COEFFICIENTS), so every
+    lane still sees exactly the same value it saw as a scalar. Total extra
+    memory is (CHAINS + 1) * block_size elements, which is negligible next to
+    Expanded in FP32 first: Ascend's repeat_interleave has no FP8 kernel, and
+    converting afterwards is exact because each value is copied, not rounded.
+    Total extra memory is (CHAINS + 1) * block_size elements, which is
+    negligible next to the input and output buffers.
+    """
+    expanded = coefficients.float().repeat_interleave(block_size)
+    return expanded.to(coefficients.dtype).contiguous()
 
 
 def _make_inputs(dtype, elements, device, *, int8_mul_add=False):
@@ -747,9 +1001,11 @@ def _make_inputs(dtype, elements, device, *, int8_mul_add=False):
         if packed >= 2**31:
             packed -= 2**32
         coefficients = torch.tensor([packed] + list(range(1, CHAINS + 1)), dtype=torch.int32)
-    elif dtype in ("fp16", "bf16"):
+    elif dtype in ("fp16", "bf16", "fp8"):
         # Exact arithmetic in every supported floating format. Coefficients are
         # loaded from memory, so the compiler cannot fold the two-cycle away.
+        # Multiples of 1/8 in [-1, 1] are exact in E4M3FN too, so FP8 uses the
+        # same exactly representable involution and keeps zero tolerance.
         inputs = (torch.randint(1, 8, (CHAINS, elements)).float() / 8).to(DTYPES[dtype])
         coefficients = torch.tensor([-1.0] + [(i + 1) / 8 for i in range(CHAINS)],
                                     dtype=DTYPES[dtype])
@@ -775,6 +1031,30 @@ def _compile_failure_is_unsupported(exc):
         r"\b" + dtype + r"\s+(?:(?:arithmetic|dtype|type)\s+)?(?:is\s+)?(?:unsupported|not supported)\b",
         r"(?:does not support|doesn't support)\s+(?:the\s+)?(?:(?:dtype|type)\s+)?['\"]?" + dtype + r"\b",
         r"\b(?:dp4a|fma(?:\.[a-z0-9]+)*|bf16|f16|f64)\b[^\n]*requires\s+['\"]?(?:\.target\s+)?sm_\d+",
+    )
+    return any(re.search(pattern, message) for pattern in patterns)
+
+
+def _compile_failure_is_resource_limit(exc):
+    """Recognize a per-configuration capacity limit reported as text.
+
+    `triton.OutOfResources` covers the cases Triton itself detects, but a
+    vendor compiler that runs after Triton can reject a tile for want of
+    stack, scratch, or local memory and surface it only as a backend fatal
+    error. Ascend's BiShengIR reports "The total stack object size (20256)
+    exceeded vf stack size (6144)" for FP32 at block=2048/unroll=16. That is
+    the same class of exclusion as OutOfResources -- the configuration is too
+    large, the dtype is not unsupported -- so it must skip that point in the
+    sweep rather than abort the whole dtype. Kept deliberately narrow: only
+    explicit capacity-exceeded wording matches, so a genuine compiler bug
+    still raises.
+    """
+    message = str((exc.error_message or "") if isinstance(exc, CompilationError) else exc).lower()
+    patterns = (
+        r"exceeded\s+\w+\s+stack size",
+        r"stack object size\s*\(\d+\)\s*exceeded",
+        r"\b(?:ub|local memory|scratch|shared memory)\b[^\n]*\b(?:overflow|exceeded|exhausted)\b",
+        r"requires \d+ bits while \d+ bits available",
     )
     return any(re.search(pattern, message) for pattern in patterns)
 
@@ -805,7 +1085,11 @@ def run_benchmark(args, metadata, is_xpu):
     reason = unsupported_dtype_reason(args.dtype, metadata)
     if reason:
         raise UnsupportedVectorDtype(reason)
-    reason = not_implemented_dtype_reason(args.dtype)
+    # Resolve the device lazily: the status paths below must stay usable
+    # without an accelerator runtime, so only a dtype that needs a compile
+    # probe may touch it.
+    reason = not_implemented_dtype_reason(
+        args.dtype, (lambda: get_device(args)) if args.dtype == "fp8" else None)
     if reason:
         raise NotImplementedVectorDtype(reason)
     if not metadata.get("sm_count"):
@@ -834,6 +1118,10 @@ def run_benchmark(args, metadata, is_xpu):
             # hoisted out of the loop.
             use_widened_fma, widened_fma_reason = backend_supports_widened_fma(args.dtype, device)
     fully_static = needs_fully_static_loop(args.dtype, is_xpu)
+    # Independent of which arithmetic form was selected above: the defect is in
+    # lowering a scalar operand of this dtype, not in the multiply-add itself.
+    broadcast_coefficients, broadcast_reason = (False, None) if is_int8 else \
+        needs_broadcast_coefficients(args.dtype, device)
     source_operation = ("INT8_MUL_ADD_MOD256" if int8_mul_add else "DP4A") if is_int8 else (
         "FMA" if use_explicit_fma else "WIDENED_FMA" if use_widened_fma else "MUL_ADD")
     median_key, peak_key = ("tops", "peak_tops") if is_int8 else ("tflops", "peak_tflops")
@@ -864,6 +1152,8 @@ def run_benchmark(args, metadata, is_xpu):
     if fully_static:
         print(f"Loop is fully unrolled: the FlagTree XPU compiler cannot lower an scf.for "
               f"carrying {args.dtype.upper()} state, so every iteration is emitted inline")
+    if broadcast_reason:
+        print(broadcast_reason)
     if args.quick:
         print("QUICK smoke mode: throughput is not a representative performance result")
     print(f"blocks/unit  block  warps  unroll  registers  median_ms  median_{unit}  peak_{unit}")
@@ -887,6 +1177,10 @@ def run_benchmark(args, metadata, is_xpu):
                                  "reduce --blocks-per-sm or --block-sizes")
             try:
                 inputs, coefficients = _make_inputs(args.dtype, elements, device, int8_mul_add=int8_mul_add)
+                # The kernel may need coefficients expanded, but the reference
+                # indexes them by chain, so validation keeps the compact form.
+                kernel_coefficients = (_expand_coefficients(coefficients, block_size)
+                                       if broadcast_coefficients else coefficients)
                 output = torch.empty_like(inputs)
             except Exception as exc:
                 if _storage_failure_is_unsupported(exc):
@@ -895,14 +1189,14 @@ def run_benchmark(args, metadata, is_xpu):
                 raise
             for num_warps in args.num_warps:
                 for unroll in args.unroll:
-                    output.fill_(-128 if int8_mul_add else -(2**31) if is_int8 else float("nan"))
+                    _fill_sentinel(output, -128 if int8_mul_add else -(2**31) if is_int8 else float("nan"))
 
                     def run(iterations=args.iterations, unroll_value=unroll):
                         return launch_vector(
-                            vector_fma_kernel, (blocks,), inputs, output, coefficients,
+                            vector_fma_kernel, (blocks,), inputs, output, kernel_coefficients,
                             elements, iterations, block_size, unroll_value,
                             use_explicit_fma, num_warps, is_int8, use_dp4a,
-                            fully_static, use_widened_fma,
+                            fully_static, use_widened_fma, broadcast_coefficients,
                         )
 
                     try:
@@ -915,6 +1209,9 @@ def run_benchmark(args, metadata, is_xpu):
                     except Exception as exc:
                         if isinstance(exc, UnsupportedVectorDtype) or _compile_failure_is_unsupported(exc):
                             exclude("unsupported", exc, blocks_per_sm, block_size, num_warps, unroll)
+                            continue
+                        if _compile_failure_is_resource_limit(exc):
+                            exclude("resource_limit", exc, blocks_per_sm, block_size, num_warps, unroll)
                             continue
                         if isinstance(exc, CompilationError):
                             exclude("compilation_error", exc, blocks_per_sm, block_size, num_warps, unroll)
@@ -969,6 +1266,8 @@ def run_benchmark(args, metadata, is_xpu):
                         "includes_unpacking": False,
                         "operation": source_operation,
                         "loop_structure": "fully_static" if fully_static else "strip_mined",
+                        "coefficient_load": ("broadcast_vector" if broadcast_coefficients
+                                            else "scalar"),
                         "hardware_fusion_verified": bool(use_explicit_fma
                                                          and assembly["native_arithmetic_verified"]),
                         "explicit_fma_supported": use_explicit_fma,
@@ -1037,7 +1336,11 @@ def main():
     if reason:
         emit_unsupported(f"vector_{args.dtype}", metadata, args, reason)
         return
-    reason = not_implemented_dtype_reason(args.dtype)
+    # Resolve the device lazily: the status paths below must stay usable
+    # without an accelerator runtime, so only a dtype that needs a compile
+    # probe may touch it.
+    reason = not_implemented_dtype_reason(
+        args.dtype, (lambda: get_device(args)) if args.dtype == "fp8" else None)
     if reason:
         emit_not_implemented(f"vector_{args.dtype}", metadata, args, reason)
         return

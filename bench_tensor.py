@@ -189,7 +189,13 @@ def _configs(vendor: str, dtype: str = "fp16") -> list[dict[str, int]]:
         choices = [(64, 128, 32, 4, 3), (128, 128, 64, 8, 3),
                    (128, 256, 64, 8, 3), (64, 128, 64, 4, 4)]
     else:
-        choices = [(32, 32, 32, 4, 1), (64, 64, 32, 4, 1)]
+        # Mirrors the fallback tile set in `_peak_configs`: 32x32/64x64 alone
+        # can sit far below a matrix unit that consumes a whole tile per
+        # instruction, and the nvidia/amd branches above already carry
+        # 128x128-class shapes for the same reason.
+        choices = [(32, 32, 32, 4, 1), (64, 64, 32, 4, 1),
+                   (128, 128, 64, 4, 1), (256, 128, 64, 4, 1),
+                   (128, 256, 64, 4, 1)]
     return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
                  num_stages=s) for m, n, k, w, s in choices]
 
@@ -221,6 +227,19 @@ def _inputs(m: int, n: int, k: int, dtype: torch.dtype, device: torch.device):
              * (1.0 / math.sqrt(k))).to(dtype)
     c = torch.empty((m, n), dtype=_output_dtype(dtype), device=device)
     return a, b, c
+
+
+def _stack2(first: torch.Tensor, second: torch.Tensor) -> torch.Tensor:
+    """Stack two equal-shaped tensors along a new leading axis.
+
+    `torch.stack` is the natural spelling, but not every vendor implements it
+    for every storage dtype it otherwise supports: on Ascend, aclnnStack
+    rejects float8_e4m3fn while torch.cat of unsqueezed views handles it.
+    `cat` of two unsqueezed views is the same tensor layout and the same value
+    for every dtype, so this helper is used instead of a vendor branch. The
+    copy is explicit either way; no backend inlines it into the timed kernel.
+    """
+    return torch.cat((first.unsqueeze(0), second.unsqueeze(0)), dim=0)
 
 
 def _reference(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -399,7 +418,23 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
                    (256, 16, k, 2), (128, 16, k, 1),
                    (512, 32, 2 * k, 8), (128, 64, k, 4)]
     else:
-        choices = [(32, 32, k, 4), (64, 64, k, 4)]
+        # Backends whose matrix unit consumes a whole tile per instruction need
+        # an accumulator tile large enough to cover the instruction's issue
+        # latency, so the 32x32/64x64 pair alone can land a long way below the
+        # achievable rate. On Ascend950DT every dtype gains about 3x between
+        # 64x64 and 128x128 and then flattens: BF16/FP16 measure 137 TFLOP/s at
+        # 64x64 against 430 at 256x128x2k, INT8 155 TOP/s against 859, FP8 271
+        # against 861, TF32 101 TFLOP/s against 215. The small tiles are kept
+        # because they remain the best choice where the matrix unit is fed per
+        # warp instead, and because a narrow tile is the only one that fits
+        # when the accumulator is wide.
+        # Shapes stay expressed in multiples of the per-dtype k so the sweep
+        # picks the winner per dtype rather than a vendor branch choosing it.
+        # 256x256 and 512x128 are deliberately absent: both exceed the
+        # Ascend950DT unified-buffer budget and fail to compile at every k.
+        choices = [(32, 32, k, 4), (64, 64, k, 4),
+                   (128, 128, 2 * k, 4), (256, 128, 2 * k, 4),
+                   (128, 256, 2 * k, 4)]
     return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
                  num_stages=1, chains=2) for m, n, k, w in choices]
 
@@ -454,7 +489,7 @@ def _validate_fp32_precision(device, dot_input_precision: str,
     b = torch.eye(size, dtype=torch.float32, device=device)
     if mode == "peak":
         peak_a = a.unsqueeze(0)
-        peak_b = torch.stack((b, b)).unsqueeze(1)
+        peak_b = _stack2(b, b).unsqueeze(1)
         c = torch.empty((2, 1, size, size), dtype=torch.float32, device=device)
         _launch_peak(peak_a, peak_b, c, 1, config, dot_input_precision)
     else:
@@ -465,7 +500,7 @@ def _validate_fp32_precision(device, dot_input_precision: str,
         expected.fill_(1.0)
         expected[0, 1] = tf32_mantissa
         expected[0, 2] = tf32_exponent
-    expected_output = expected if mode == "gemm" else torch.stack((expected, expected)).unsqueeze(1)
+    expected_output = expected if mode == "gemm" else _stack2(expected, expected).unsqueeze(1)
     max_abs_error = (c - expected_output).abs().max().item()
     if max_abs_error != 0.0:
         observed = (c if mode == "gemm" else c[0, 0])[0, 0].item()
@@ -502,7 +537,7 @@ def _validate_fp64_precision(device, mode: str) -> dict:
     b = torch.eye(inner, size, dtype=torch.float64, device=device)
     if mode == "peak":
         c = torch.empty((2, 1, size, size), dtype=torch.float64, device=device)
-        _launch_peak(a.unsqueeze(0), torch.stack((b, b)).unsqueeze(1), c, 1, config)
+        _launch_peak(a.unsqueeze(0), _stack2(b, b).unsqueeze(1), c, 1, config)
     else:
         c = torch.empty((size, size), dtype=torch.float64, device=device)
         _launch(a, b, c, config)
@@ -510,7 +545,7 @@ def _validate_fp64_precision(device, mode: str) -> dict:
     expected = torch.cat((a, torch.zeros((size, size - inner), dtype=torch.float64,
                                          device=device)), dim=1)
     if mode == "peak":
-        expected = torch.stack((expected, expected)).unsqueeze(1)
+        expected = _stack2(expected, expected).unsqueeze(1)
     error = (c - expected).abs().max().item()
     if error != 0.0:
         permuted = _row_multiset_matches(c, expected)
@@ -570,7 +605,7 @@ def _validate_dot_lowering(device, dtype: torch.dtype, dtype_name: str, mode: st
             b = torch.zeros((k, n), device=device).to(dtype)
             if mode == "peak":
                 c = torch.empty((2, 1, m, n), dtype=_output_dtype(dtype), device=device)
-                _launch_peak(a.unsqueeze(0), torch.stack((b, b)).unsqueeze(1), c, 1,
+                _launch_peak(a.unsqueeze(0), _stack2(b, b).unsqueeze(1), c, 1,
                              probe, dot_input_precision)
             else:
                 c = torch.empty((m, n), dtype=_output_dtype(dtype), device=device)
@@ -879,7 +914,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                              "status": "unsupported", "reason": reason})
                 print(f"  config={config}: unsupported ({reason})")
                 continue
-            reference = torch.stack((_reference(a, b[0]), _reference(a, b[1])))
+            reference = _stack2(_reference(a, b[0]), _reference(a, b[1]))
             reference.mul_(args.iterations)
             correctness = _validate_peak(c, reference, args.dtype, k, args.iterations)
             if info["spill_count"]:

@@ -1,0 +1,206 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:5: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+FP32 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems ascend device events
+          8    256      4       1          0    2.29040        3.750      3.751
+          8    256      4       4          0    1.29592        6.628      6.629
+          8    256      4       8          0    1.14445        7.506      7.509
+          8    256      4      16          0    1.30493        6.583      6.584
+          8    256      8       1          0    2.29040        3.750      3.751
+          8    256      8       4          0    1.29594        6.628      6.629
+          8    256      8       8          0    1.14433        7.507      7.508
+          8    256      8      16          0    1.30505        6.582      6.583
+          8    512      4       1          0    3.58382        4.794      4.794
+          8    512      4       4          0    2.13179        8.059      8.060
+          8    512      4       8          0    2.00052        8.588      8.589
+          8    512      4      16          0    2.49922        6.874      6.875
+          8    512      8       1          0    3.58391        4.794      4.794
+          8    512      8       4          0    2.13177        8.059      8.060
+          8    512      8       8          0    2.00042        8.588      8.589
+          8    512      8      16          0    2.49924        6.874      6.875
+          8   1024      4       1          0    6.16924        5.570      5.570
+          8   1024      4       4          0    3.75369        9.154      9.155
+          8   1024      4       8          0    3.70945        9.263      9.264
+          8   1024      4      16          0    4.27287        8.041      8.043
+          8   1024      8       1          0    6.16914        5.570      5.570
+          8   1024      8       4          0    3.75400        9.153      9.154
+          8   1024      8       8          0    3.70961        9.262      9.264
+          8   1024      8      16          0    4.27316        8.041      8.042
+          8   2048      4       1          0   11.26392        6.101      6.102
+          8   2048      4       4          0    6.94698        9.892      9.893
+          8   2048      4       8          0    7.14017        9.624      9.625
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 8, 'block_size': 2048, 'num_warps': 4, 'unroll': 16}: 
+///------------------[ERROR][Triton][BEG]------------------
+[ConvertLinalgIRToBinary] encounters error:
+[INFO] Using merged native A5 regbase pipeline
+[WARNING] --limit-auto-multi-buffer-only-for-local-buffer, --limit-auto-multi-buffer-of-local-buffer and --limit-auto-multi-buffer-buffer are deprecated and will be removed in BiShengIR 1.4.0. Equivalent setting: --multibuffer-mode="[(gm, 2), (l1, 2), (l0c, 2), (ub, 2)]". A3 default gm=4, A5 default gm=2; set a level to 1 to disable it.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+bisheng: warning: the flag '--cce-aicore-input-parameter-size=1536' has been deprecated and will be ignored [-Wunused-command-line-argument]
+fatal error: error in backend: The total stack object size (20256) exceeded vf stack size (6144). The spilled objects are: 
+arguments size:	0
+Aux-Scalars:	0
+Predicates:	0
+Vector Slots:	79
+Total Spilled Byte Size:	20256
+
+bisheng: error: clang frontend command failed with exit code 70 (use -v to see invocation)
+2026-10-23T10:55:39+08:00 clang version 15.0.5 (clang-5c68a1cb1231 flang-5c68a1cb1231)
+Target: aarch64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/local/Ascend/cann-9.2.1/bin
+[ERROR] Executing: /usr/local/Ascend/cann-9.2.1/bin/bisheng /tmp/tmp2qv4wgj3/kernel.ll -o /tmp/tmp2qv4wgj3/kernel.o --cce-aicore-arch=dav-c310-vec --cce-aicore-only -O2 -cce-bitcode-is-aicore -Wno-override-module -mllvm --cce-vf-auto-sync=global -mllvm -cce-aicore-dcci-insert-for-scalar=false -mllvm -cce-vf-aa-between-iters=true -mllvm -cce-vf-enable-loop-fusion=false -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/lib/libdevice.10.bc --cce-long-scbz=true --cce-aicore-input-parameter-size=1536 -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/bishengir/lib/meta_op.aiv.c310.O2.bc
+[ERROR] failed to execute bisheng
+loc("/tmp/tmp2qv4wgj3/kernel.mlir":1:1): error: Failed to compile BiShengLIR for device
+[ERROR] Failed to run BiShengIR regbase pipeline
+
+
+[INFO]: The compiled kernel cache is in /root/.triton/cache/IYVLYUVMDH3I7K2AME6INT77OIV75CKS5CJH7L3NOT3V3UQGXTGA
+
+///------------------[ERROR][Triton][END]------------------
+
+          8   2048      8       1          0   11.26099        6.102      6.104
+          8   2048      8       4          0    6.94546        9.894      9.896
+          8   2048      8       8          0    7.13873        9.626      9.627
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 8, 'block_size': 2048, 'num_warps': 8, 'unroll': 16}: 
+///------------------[ERROR][Triton][BEG]------------------
+[ConvertLinalgIRToBinary] encounters error:
+[INFO] Using merged native A5 regbase pipeline
+[WARNING] --limit-auto-multi-buffer-only-for-local-buffer, --limit-auto-multi-buffer-of-local-buffer and --limit-auto-multi-buffer-buffer are deprecated and will be removed in BiShengIR 1.4.0. Equivalent setting: --multibuffer-mode="[(gm, 2), (l1, 2), (l0c, 2), (ub, 2)]". A3 default gm=4, A5 default gm=2; set a level to 1 to disable it.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+bisheng: warning: the flag '--cce-aicore-input-parameter-size=1536' has been deprecated and will be ignored [-Wunused-command-line-argument]
+fatal error: error in backend: The total stack object size (20256) exceeded vf stack size (6144). The spilled objects are: 
+arguments size:	0
+Aux-Scalars:	0
+Predicates:	0
+Vector Slots:	79
+Total Spilled Byte Size:	20256
+
+bisheng: error: clang frontend command failed with exit code 70 (use -v to see invocation)
+2026-10-23T10:55:39+08:00 clang version 15.0.5 (clang-5c68a1cb1231 flang-5c68a1cb1231)
+Target: aarch64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/local/Ascend/cann-9.2.1/bin
+[ERROR] Executing: /usr/local/Ascend/cann-9.2.1/bin/bisheng /tmp/tmpw92gyq08/kernel.ll -o /tmp/tmpw92gyq08/kernel.o --cce-aicore-arch=dav-c310-vec --cce-aicore-only -O2 -cce-bitcode-is-aicore -Wno-override-module -mllvm --cce-vf-auto-sync=global -mllvm -cce-aicore-dcci-insert-for-scalar=false -mllvm -cce-vf-aa-between-iters=true -mllvm -cce-vf-enable-loop-fusion=false -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/lib/libdevice.10.bc --cce-long-scbz=true --cce-aicore-input-parameter-size=1536 -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/bishengir/lib/meta_op.aiv.c310.O2.bc
+[ERROR] failed to execute bisheng
+loc("/tmp/tmpw92gyq08/kernel.mlir":1:1): error: Failed to compile BiShengLIR for device
+[ERROR] Failed to run BiShengIR regbase pipeline
+
+
+[INFO]: The compiled kernel cache is in /root/.triton/cache/AOHQ5HVVRFOKNAKVHBQKA47OFIYMHCFHRSYF5TLFYATQICBESJNA
+
+///------------------[ERROR][Triton][END]------------------
+
+         16    256      4       1          0    4.57786        3.753      3.753
+         16    256      4       4          0    2.58964        6.634      6.635
+         16    256      4       8          0    2.28628        7.514      7.515
+         16    256      4      16          0    2.60792        6.588      6.589
+         16    256      8       1          0    4.57773        3.753      3.753
+         16    256      8       4          0    2.58969        6.634      6.635
+         16    256      8       8          0    2.28621        7.515      7.515
+         16    256      8      16          0    2.60777        6.588      6.589
+         16    512      4       1          0    7.16288        4.797      4.797
+         16    512      4       4          0    4.26060        8.065      8.066
+         16    512      4       8          0    3.99771        8.595      8.596
+         16    512      4      16          0    4.99651        6.877      6.878
+         16    512      8       1          0    7.16346        4.797      4.798
+         16    512      8       4          0    4.26058        8.065      8.065
+         16    512      8       8          0    3.99763        8.595      8.596
+         16    512      8      16          0    4.99625        6.877      6.878
+         16   1024      4       1          0   12.33686        5.570      5.571
+         16   1024      4       4          0    7.50338        9.158      9.159
+         16   1024      4       8          0    7.41435        9.268      9.269
+         16   1024      4      16          0    8.54133        8.046      8.047
+         16   1024      8       1          0   12.33579        5.571      5.571
+         16   1024      8       4          0    7.50351        9.158      9.160
+         16   1024      8       8          0    7.41424        9.269      9.269
+         16   1024      8      16          0    8.54121        8.046      8.047
+         16   2048      4       1          0   22.51158        6.105      6.106
+         16   2048      4       4          0   13.89224        9.893      9.894
+         16   2048      4       8          0   14.27968        9.625      9.626
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 16, 'block_size': 2048, 'num_warps': 4, 'unroll': 16}: 
+///------------------[ERROR][Triton][BEG]------------------
+[ConvertLinalgIRToBinary] encounters error:
+[INFO] Using merged native A5 regbase pipeline
+[WARNING] --limit-auto-multi-buffer-only-for-local-buffer, --limit-auto-multi-buffer-of-local-buffer and --limit-auto-multi-buffer-buffer are deprecated and will be removed in BiShengIR 1.4.0. Equivalent setting: --multibuffer-mode="[(gm, 2), (l1, 2), (l0c, 2), (ub, 2)]". A3 default gm=4, A5 default gm=2; set a level to 1 to disable it.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+bisheng: warning: the flag '--cce-aicore-input-parameter-size=1536' has been deprecated and will be ignored [-Wunused-command-line-argument]
+fatal error: error in backend: The total stack object size (20256) exceeded vf stack size (6144). The spilled objects are: 
+arguments size:	0
+Aux-Scalars:	0
+Predicates:	0
+Vector Slots:	79
+Total Spilled Byte Size:	20256
+
+bisheng: error: clang frontend command failed with exit code 70 (use -v to see invocation)
+2026-10-23T10:55:39+08:00 clang version 15.0.5 (clang-5c68a1cb1231 flang-5c68a1cb1231)
+Target: aarch64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/local/Ascend/cann-9.2.1/bin
+[ERROR] Executing: /usr/local/Ascend/cann-9.2.1/bin/bisheng /tmp/tmp18a1ampj/kernel.ll -o /tmp/tmp18a1ampj/kernel.o --cce-aicore-arch=dav-c310-vec --cce-aicore-only -O2 -cce-bitcode-is-aicore -Wno-override-module -mllvm --cce-vf-auto-sync=global -mllvm -cce-aicore-dcci-insert-for-scalar=false -mllvm -cce-vf-aa-between-iters=true -mllvm -cce-vf-enable-loop-fusion=false -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/lib/libdevice.10.bc --cce-long-scbz=true --cce-aicore-input-parameter-size=1536 -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/bishengir/lib/meta_op.aiv.c310.O2.bc
+[ERROR] failed to execute bisheng
+loc("/tmp/tmp18a1ampj/kernel.mlir":1:1): error: Failed to compile BiShengLIR for device
+[ERROR] Failed to run BiShengIR regbase pipeline
+
+
+[INFO]: The compiled kernel cache is in /root/.triton/cache/33TM4JLSCOLIYVFIMRAE5Q3E5AM37JC2KQRXABUOMVFYOQA7S4DQ
+
+///------------------[ERROR][Triton][END]------------------
+
+         16   2048      8       1          0   22.51164        6.105      6.106
+         16   2048      8       4          0   13.89305        9.893      9.893
+         16   2048      8       8          0   14.27914        9.625      9.626
+Excluding vector configuration (resource_limit): {'blocks_per_sm': 16, 'block_size': 2048, 'num_warps': 8, 'unroll': 16}: 
+///------------------[ERROR][Triton][BEG]------------------
+[ConvertLinalgIRToBinary] encounters error:
+[INFO] Using merged native A5 regbase pipeline
+[WARNING] --limit-auto-multi-buffer-only-for-local-buffer, --limit-auto-multi-buffer-of-local-buffer and --limit-auto-multi-buffer-buffer are deprecated and will be removed in BiShengIR 1.4.0. Equivalent setting: --multibuffer-mode="[(gm, 2), (l1, 2), (l0c, 2), (ub, 2)]". A3 default gm=4, A5 default gm=2; set a level to 1 to disable it.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+warning: warning: --enable-preload=true overrides --enablecv-pipeline-mode; forcing 'Skew'.
+bisheng: warning: the flag '--cce-aicore-input-parameter-size=1536' has been deprecated and will be ignored [-Wunused-command-line-argument]
+fatal error: error in backend: The total stack object size (20256) exceeded vf stack size (6144). The spilled objects are: 
+arguments size:	0
+Aux-Scalars:	0
+Predicates:	0
+Vector Slots:	79
+Total Spilled Byte Size:	20256
+
+bisheng: error: clang frontend command failed with exit code 70 (use -v to see invocation)
+2026-10-23T10:55:39+08:00 clang version 15.0.5 (clang-5c68a1cb1231 flang-5c68a1cb1231)
+Target: aarch64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/local/Ascend/cann-9.2.1/bin
+[ERROR] Executing: /usr/local/Ascend/cann-9.2.1/bin/bisheng /tmp/tmptm48y7xs/kernel.ll -o /tmp/tmptm48y7xs/kernel.o --cce-aicore-arch=dav-c310-vec --cce-aicore-only -O2 -cce-bitcode-is-aicore -Wno-override-module -mllvm --cce-vf-auto-sync=global -mllvm -cce-aicore-dcci-insert-for-scalar=false -mllvm -cce-vf-aa-between-iters=true -mllvm -cce-vf-enable-loop-fusion=false -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/lib/libdevice.10.bc --cce-long-scbz=true --cce-aicore-input-parameter-size=1536 -cce-link-aicore-ll-module /usr/local/python3.12.16/lib/python3.12/site-packages/triton/backends/ascend/bishengir/lib/meta_op.aiv.c310.O2.bc
+[ERROR] failed to execute bisheng
+loc("/tmp/tmptm48y7xs/kernel.mlir":1:1): error: Failed to compile BiShengLIR for device
+[ERROR] Failed to run BiShengIR regbase pipeline
+
+
+[INFO]: The compiled kernel cache is in /root/.triton/cache/Q4RAWAN3ZIQ5WL7FVNMSDQN2OAE4FTIKCNDMUKJOJLITKOO23WQQ
+
+///------------------[ERROR][Triton][END]------------------
+
+Peak measured FP32 vector workload throughput: 9.896 TFLOP/s (median 9.894 TFLOP/s; blocks/unit=8, block=2048, unroll=4, warps=8)
+JSON: /workspace/triton_chip_benchmarks/results/950dt_metrics_runs/vector_fp32.json

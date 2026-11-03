@@ -1,0 +1,71 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:5: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+Validation: masked tails passed; every measured output is checked in full.
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. GB/s and TB/s use decimal units; peak uses the shortest timed sample.
+mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s
+Note: 256 MiB per buffer excluded from the HBM-sized peak summary: buffer is smaller than 4x L2.
+Timing: graph via FlagGems ascend device events
+copy         256    1024      4    0.389433    0.390025     1378.60      1376.50
+read         256    1024      4    0.309647    0.310064      867.75       866.59
+copy         256    1024      8    0.389266    0.389974     1379.19      1376.68
+read         256    1024      8    0.309518    0.309960      868.12       866.88
+copy         256    4096      4    0.189948    0.190429     2826.41      2819.27
+read         256    4096      4    0.108063    0.108267     2484.67      2479.99
+copy         256    4096      8    0.189969    0.190476     2826.10      2818.57
+read         256    4096      8    0.108118    0.108309     2483.41      2479.02
+copy         256   16384      4    0.160229    0.160523     3350.65      3344.51
+read         256   16384      4    0.072168    0.072245     3719.84      3715.87
+copy         256   16384      8    0.160135    0.160540     3352.62      3344.16
+read         256   16384      8    0.072156    0.072271     3720.43      3714.53
+copy         512    1024      4    0.771495    0.772421     1391.77      1390.10
+read         512    1024      4    0.613997    0.614538      875.24       874.47
+copy         512    1024      8    0.771132    0.772327     1392.42      1390.27
+read         512    1024      8    0.613679    0.614287      875.69       874.83
+copy         512    4096      4    0.375600    0.376660     2858.74      2850.69
+read         512    4096      4    0.211092    0.211554     2543.92      2538.37
+copy         512    4096      8    0.375384    0.376159     2860.38      2854.49
+read         512    4096      8    0.211138    0.211407     2543.37      2540.14
+copy         512   16384      4    0.331913    0.332866     3235.01      3225.75
+read         512   16384      4    0.140924    0.141021     3809.88      3807.26
+copy         512   16384      8    0.331357    0.332766     3240.44      3226.72
+read         512   16384      8    0.140792    0.141074     3813.45      3805.84
+copy        1024    1024      4    1.532961    1.535190     1400.87      1398.84
+read        1024    1024      4    1.222139    1.223505      879.43       878.45
+copy        1024    1024      8    1.532293    1.534953     1401.48      1399.06
+read        1024    1024      8    1.221791    1.223003      879.68       878.81
+copy        1024    4096      4    0.742450    0.743679     2892.43      2887.65
+read        1024    4096      4    0.416890    0.417363     2576.23      2573.31
+copy        1024    4096      8    0.741849    0.743416     2894.77      2888.67
+read        1024    4096      8    0.417011    0.417505     2575.48      2572.43
+copy        1024   16384      4    0.655020    0.656493     3278.50      3271.14
+read        1024   16384      4    0.278137    0.278407     3860.71      3856.97
+copy        1024   16384      8    0.655377    0.656332     3276.72      3271.94
+read        1024   16384      8    0.278257    0.278575     3859.05      3854.64
+copy        2048    1024      4    3.087609    3.093227     1391.03      1388.51
+read        2048    1024      4    2.439723    2.442678      881.08       880.01
+copy        2048    1024      8    3.086792    3.091810     1391.40      1389.14
+read        2048    1024      8    2.438752    2.441695      881.43       880.36
+copy        2048    4096      4    1.483628    1.486776     2894.91      2888.78
+read        2048    4096      4    0.827653    0.829871     2595.30      2588.36
+copy        2048    4096      8    1.482571    1.485951     2896.97      2890.38
+read        2048    4096      8    0.827721    0.829631     2595.09      2589.11
+copy        2048   16384      4    1.314936    1.319874     3266.29      3254.07
+read        2048   16384      4    0.550742    0.551378     3899.49      3895.00
+copy        2048   16384      8    1.315426    1.318347     3265.08      3257.84
+read        2048   16384      8    0.550437    0.551190     3901.65      3896.32
+Best measured copy bandwidth: 3278.50 GB/s (3.278 TB/s), 1024 MiB/buffer, block=16384, warps=4.
+Best measured read bandwidth: 3901.65 GB/s (3.902 TB/s), 2048 MiB/buffer, block=16384, warps=8.
+Highest measured HBM-sized pattern: read, 3.902 TB/s (best observed timing, not a theoretical limit).
+These are effective bytes requested by the kernels; read includes a block reduction. Physical DRAM traffic and other access patterns can differ.
+JSON: /workspace/triton_chip_benchmarks/results/950dt_metrics_runs/memory_bandwidth.json
