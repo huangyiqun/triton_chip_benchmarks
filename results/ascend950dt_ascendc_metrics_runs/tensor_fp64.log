@@ -1,0 +1,3 @@
+Device 0: Ascend950DT_9582 (arch 3510)
+UNSUPPORTED: The Ascend 950DT Cube matrix unit exposes no FP64 instruction: asc_mmad and asc_mmad_mx provide overloads for bfloat16_t, half, float, int8_t, int4b_t, fp8_e4m3fn_t, fp8_e5m2_t, hifloat8_t and the fp4x2 types, and no double-precision overload exists
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/tensor_fp64.json

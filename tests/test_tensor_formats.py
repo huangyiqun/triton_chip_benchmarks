@@ -21,13 +21,53 @@ class TensorFormatTests(unittest.TestCase):
         return args
 
     def test_all_requested_formats_and_tf32_alias(self):
-        for name in ("bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8"):
+        for name in ("bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8", "fp4"):
             with self.subTest(dtype=name):
                 args = self.arguments("--dtype", name)
                 self.assertEqual(args.requested_dtype, name)
                 self.assertIsNotNone(getattr(tensor.torch, tensor._dtype_name(args.dtype)))
         args = self.arguments("--dtype", "tf32")
         self.assertEqual((args.dtype, args.input_precision), ("fp32", "tf32"))
+
+    def test_fp4_is_microscaled_e2m1_in_a_uint8_container(self):
+        # FP4 operands ride in uint8: two E2M1 elements per byte, with one E8M0
+        # scale per 32 elements. The descriptor must keep the arithmetic format
+        # distinct from the container, so a reader cannot mistake the row for a
+        # uint8 or INT4 measurement.
+        self.assertEqual(tensor._dtype_name("fp4"), "uint8")
+        descriptor = tensor._precision_descriptor("fp4", None)
+        self.assertEqual(descriptor["input_storage_dtype"], "e2m1")
+        self.assertEqual(descriptor["math_mode"], "mxfp4_e2m1")
+        self.assertEqual(descriptor["container_dtype"], "uint8")
+        self.assertEqual(descriptor["elements_per_container"], tensor.FP4_PACKING_FACTOR)
+        self.assertEqual(descriptor["scale_group_size"], tensor.MX_GROUP_SIZE)
+        self.assertEqual(descriptor["dot_operation"], "tl.dot_scaled")
+
+    def test_fp4_tiles_keep_k_a_multiple_of_the_mx_group(self):
+        # Every FP4 tile must carry a whole number of MX groups along K, and
+        # the packed K extent must be a whole number of bytes.
+        for vendor in ("ascend", "nvidia", "thead"):
+            for config in tensor._peak_configs(vendor, "fp4"):
+                with self.subTest(vendor=vendor, config=config):
+                    self.assertEqual(config["block_k"] % tensor.MX_GROUP_SIZE, 0)
+                    self.assertEqual(config["block_k"] % tensor.FP4_PACKING_FACTOR, 0)
+
+    def test_fp4_packing_round_trips_through_the_e2m1_code_table(self):
+        # The low nibble must hold the first element, as tl.dot_scaled defines.
+        codes = tensor.torch.tensor([[1, 2, 9, 10]], dtype=tensor.torch.uint8)
+        packed = tensor._pack_e2m1_pairs(codes)
+        self.assertEqual(packed.tolist(), [[2 << 4 | 1, 10 << 4 | 9]])
+        self.assertEqual(len(tensor.E2M1_VALUES), 16)
+        self.assertEqual(tensor.E2M1_VALUES[1], 0.5)
+        self.assertEqual(tensor.E2M1_VALUES[2], 1.0)
+        self.assertEqual(tensor.E2M1_VALUES[9], -0.5)
+        self.assertEqual(tensor.E2M1_VALUES[10], -1.0)
+
+    def test_fp4_gemm_mode_is_refused_rather_than_silently_measured(self):
+        args = self.arguments("--dtype", "fp4", "--mode", "gemm")
+        reason = tensor._capability_reason(args, {"vendor_name": "ascend"})
+        self.assertIsNotNone(reason)
+        self.assertIn("peak only", reason)
 
     def test_integer_rates_do_not_claim_floating_point_operations(self):
         timing = {"median_ms": 2.0, "min_ms": 1.0}

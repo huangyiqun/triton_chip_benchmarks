@@ -41,6 +41,23 @@ class TensorUnsupportedError(RuntimeError):
     """The requested format or its required execution precision is unavailable."""
 
 
+# OCP MX FP4: E2M1 elements packed two per byte, with one E8M0 scale factor
+# shared by every MX_GROUP_SIZE elements along K. Both constants are fixed by
+# the OCP Microscaling Formats v1.0 specification, not by this benchmark.
+FP4_PACKING_FACTOR = 2
+MX_GROUP_SIZE = 32
+# E8M0 code 127 is the biased encoding of 2**0. A unit scale keeps the measured
+# arithmetic equal to the raw FP4 products, so the exact reference stays exact,
+# while the hardware still runs the full MX dataflow including scale lookup and
+# application. A benchmark that disabled scaling would not be measuring the MX
+# matrix path the format actually uses.
+E8M0_UNIT_SCALE = 127
+# The sixteen E2M1 values in code order: sign, two exponent bits, one mantissa
+# bit. Used to build exactly representable operands and their FP64 reference.
+_E2M1_MAGNITUDES = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
+E2M1_VALUES = _E2M1_MAGNITUDES + tuple(-value for value in _E2M1_MAGNITUDES)
+
+
 def _output_dtype(dtype):
     if dtype == torch.int8:
         return torch.int32
@@ -281,6 +298,14 @@ def _peak_tolerance(dtype: str, block_k: int, iterations: int) -> float:
     """
     if dtype == "int8":
         return 0.0
+    if dtype == "fp4":
+        # FP4 peak operands are +/-0.5 and +/-1.0, so each dot entry is a sum
+        # of block_k products of magnitude at most 1 and every partial sum is
+        # an exact multiple of 0.25 bounded by block_k. With iterations
+        # accumulations the exact value stays well inside FP32's integer-exact
+        # range, so the only rounding is the accumulator's, bounded the same
+        # way as the other floating formats.
+        return 4.0 * iterations * block_k * 1.0 * 2.0**-24
     unit_roundoff = 2.0**-53 if dtype == "fp64" else 2.0**-24
     return 4.0 * iterations * block_k * (1.0 / 256.0) * unit_roundoff
 
@@ -329,19 +354,38 @@ def _normalize_precision_args(parser: argparse.ArgumentParser, args) -> None:
 
 
 def _dtype_name(dtype: str) -> str:
+    # FP4 has no PyTorch scalar dtype that Triton accepts as an operand: OCP MX
+    # FP4 operands are carried as uint8 with two E2M1 elements per byte, exactly
+    # as tl.dot_scaled documents. The storage dtype therefore differs from the
+    # arithmetic format, which _precision_descriptor records separately.
     return {"fp16": "float16", "bf16": "bfloat16", "fp8": "float8_e4m3fn",
-            "fp32": "float32", "tf32": "float32", "int8": "int8", "fp64": "float64"}[dtype]
+            "fp32": "float32", "tf32": "float32", "int8": "int8", "fp64": "float64",
+            "fp4": "uint8"}[dtype]
 
 
 def _precision_descriptor(dtype: str, dot_input_precision: str | None) -> dict:
-    storage = "fp32" if dtype == "fp32" else ("e4m3fn" if dtype == "fp8" else dtype)
+    storage = "fp32" if dtype == "fp32" else ("e4m3fn" if dtype == "fp8" else
+                                              "e2m1" if dtype == "fp4" else dtype)
     if dtype == "fp32":
         math_mode = "tf32" if dot_input_precision == "tf32" else "ieee_fp32"
+    elif dtype == "fp4":
+        math_mode = "mxfp4_e2m1"
     else:
         math_mode = dtype
-    return {"input_format": storage, "input_storage_dtype": storage,
-            "dot_input_precision": dot_input_precision,
-            "math_mode": math_mode}
+    descriptor = {"input_format": storage, "input_storage_dtype": storage,
+                  "dot_input_precision": dot_input_precision,
+                  "math_mode": math_mode}
+    if dtype == "fp4":
+        descriptor.update({
+            "container_dtype": "uint8",
+            "elements_per_container": FP4_PACKING_FACTOR,
+            "scale_format": "e8m0",
+            "scale_group_size": MX_GROUP_SIZE,
+            "scale_value": "2**0 (E8M0 code 127) for every group",
+            "microscaled": True,
+            "dot_operation": "tl.dot_scaled",
+        })
+    return descriptor
 
 
 @triton.jit
@@ -381,9 +425,52 @@ def _tensor_peak_kernel(
     tl.store(C + BLOCKS * BLOCK_M * BLOCK_N + c_offsets, acc1)
 
 
+@triton.jit
+def _tensor_peak_scaled_kernel(
+    A, SA, B, SB, C,
+    BLOCKS: tl.constexpr, ITERATIONS: tl.constexpr,
+    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
+    PACKED: tl.constexpr, GROUP: tl.constexpr, FORMAT: tl.constexpr,
+):
+    """Resident microscaled (MX) peak, mirroring _tensor_peak_kernel.
+
+    BLOCK_K counts arithmetic elements. Operands hold PACKED of them per
+    container byte, so their K extent is BLOCK_K // PACKED, and each operand row
+    carries BLOCK_K // GROUP scale factors. Operands, scales and both
+    accumulators stay resident; only tl.dot_scaled repeats in the loop.
+    """
+    block = tl.program_id(0).to(tl.int64)
+    rows = tl.arange(0, BLOCK_M)
+    cols = tl.arange(0, BLOCK_N)
+    STORED_K: tl.constexpr = BLOCK_K // PACKED
+    GROUPS: tl.constexpr = BLOCK_K // GROUP
+    stored = tl.arange(0, STORED_K)
+    groups = tl.arange(0, GROUPS)
+    a = tl.load(A + block * BLOCK_M * STORED_K + rows[:, None] * STORED_K + stored[None, :])
+    b_offsets = block * STORED_K * BLOCK_N + stored[:, None] * BLOCK_N + cols[None, :]
+    b0 = tl.load(B + b_offsets)
+    b1 = tl.load(B + BLOCKS * STORED_K * BLOCK_N + b_offsets)
+    # Scales are indexed [M, K/GROUP] for A and [N, K/GROUP] for B; the B scale
+    # is deliberately not transposed, as tl.dot_scaled requires.
+    sa = tl.load(SA + block * BLOCK_M * GROUPS + rows[:, None] * GROUPS + groups[None, :])
+    sb = tl.load(SB + block * BLOCK_N * GROUPS + cols[:, None] * GROUPS + groups[None, :])
+    acc0 = tl.full((BLOCK_M, BLOCK_N), 0, tl.float32)
+    acc1 = tl.full((BLOCK_M, BLOCK_N), 0, tl.float32)
+    for _ in range(ITERATIONS):
+        acc0 = tl.dot_scaled(a, sa, FORMAT, b0, sb, FORMAT, acc0)
+        acc1 = tl.dot_scaled(a, sa, FORMAT, b1, sb, FORMAT, acc1)
+    c_offsets = block * BLOCK_M * BLOCK_N + rows[:, None] * BLOCK_N + cols[None, :]
+    tl.store(C + c_offsets, acc0)
+    tl.store(C + BLOCKS * BLOCK_M * BLOCK_N + c_offsets, acc1)
+
+
 def _peak_configs(vendor: str, dtype: str = "fp16",
                   dot_input_precision: str | None = None) -> list[dict[str, int]]:
-    k = 64 if dtype in ("fp8", "int8") else 16 if dtype == "fp64" else 32
+    # FP4 needs K to be a multiple of the 32-element MX group, and the Ascend
+    # MX path rejects K=64 outright (its meta-op library has no 64-element FP4
+    # fractal), so FP4's smallest usable K is 128.
+    k = (128 if dtype == "fp4" else 64 if dtype in ("fp8", "int8")
+         else 16 if dtype == "fp64" else 32)
     if dtype == "fp64":
         choices = [(32, 32, k, 4), (32, 64, k, 4)]
     elif dtype == "fp32" and dot_input_precision == "ieee":
@@ -435,19 +522,91 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
         choices = [(32, 32, k, 4), (64, 64, k, 4),
                    (128, 128, 2 * k, 4), (256, 128, 2 * k, 4),
                    (128, 256, 2 * k, 4)]
+        if dtype == "fp4":
+            # FP4's k is already 128, so `2 * k` would be 256 everywhere. Keep
+            # the same tile footprints, add a K=128 variant, and extend to
+            # K=512: FP4 packs two elements per byte, so a deeper K costs the
+            # same operand bytes as half that K in FP8 and keeps the MX scale
+            # fetch amortized over more MACs. On Ascend950DT that is where the
+            # format approaches its ceiling -- 256x128x512 and 128x256x512
+            # measure 1725 TFLOP/s against 1570 at K=256, which is 99.7% of
+            # the 1730 TFLOP/s the card's 32 Cube cores imply and matches what
+            # a native Ascend C kernel reaches on the same card.
+            # 512x128, 128x512 and 256x256 are absent at every K: all three
+            # exceed the Ascend950DT buffer budget, exactly as for the other
+            # formats.
+            choices = [(32, 32, k, 4), (64, 64, k, 4),
+                       (128, 128, k, 4), (128, 128, 2 * k, 4),
+                       (256, 128, 2 * k, 4), (128, 256, 2 * k, 4),
+                       (256, 128, 4 * k, 4), (128, 256, 4 * k, 4),
+                       (128, 128, 8 * k, 4)]
     return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
                  num_stages=1, chains=2) for m, n, k, w in choices]
 
 
 def _launch_peak(a, b, c, iterations: int, config: dict[str, int],
-                 dot_input_precision: str | None = None):
+                 dot_input_precision: str | None = None, scales=None):
+    """Launch the resident peak kernel; `scales` selects the microscaled path."""
     blocks = a.shape[0]
+    if scales is not None:
+        scale_a, scale_b = scales
+        return _tensor_peak_scaled_kernel[(blocks,)](
+            a, scale_a, b, scale_b, c, BLOCKS=blocks, ITERATIONS=iterations,
+            BLOCK_M=config["block_m"], BLOCK_N=config["block_n"],
+            BLOCK_K=config["block_k"], PACKED=FP4_PACKING_FACTOR,
+            GROUP=MX_GROUP_SIZE, FORMAT="e2m1",
+            num_warps=config["num_warps"], num_stages=config["num_stages"],
+        )
     return _tensor_peak_kernel[(blocks,)](
         a, b, c, BLOCKS=blocks, ITERATIONS=iterations,
         BLOCK_M=config["block_m"], BLOCK_N=config["block_n"], BLOCK_K=config["block_k"],
         DOT_INPUT_PRECISION=dot_input_precision,
         num_warps=config["num_warps"], num_stages=config["num_stages"],
     )
+
+
+def _pack_e2m1_pairs(codes: torch.Tensor) -> torch.Tensor:
+    """Pack E2M1 nibble codes two per byte along the last dimension.
+
+    tl.dot_scaled specifies the first element in the lower bits, so an even
+    index k goes to the low nibble and k+1 to the high nibble.
+    """
+    low = codes[..., 0::2].to(torch.int16)
+    high = codes[..., 1::2].to(torch.int16)
+    return ((high << 4) | low).to(torch.uint8)
+
+
+def _fp4_peak_inputs(blocks: int, config: dict[str, int], device):
+    """Build packed MX FP4 operands, unit scales, and their exact FP64 values.
+
+    Operands are drawn from the four E2M1 codes for +/-0.5 and +/-1.0. Each dot
+    entry is then a sum of block_k products of magnitude at most 1, which FP32
+    accumulates exactly, and the repeated accumulation over the iteration range
+    stays exactly representable. Returning the FP64 element values alongside the
+    packed bytes lets the reference be computed from what was really stored,
+    rather than from a second independent construction that could silently
+    disagree with it.
+    """
+    m, n, k = (config[f"block_{axis}"] for axis in ("m", "n", "k"))
+    # Codes 1, 2 (+0.5, +1.0) and 9, 10 (-0.5, -1.0).
+    palette = torch.tensor([1, 2, 9, 10], dtype=torch.uint8)
+    codes_a = palette[torch.randint(len(palette), (blocks, m, k))]
+    codes_b = palette[torch.randint(len(palette), (2, blocks, k, n))]
+    lookup = torch.tensor(E2M1_VALUES, dtype=torch.float64)
+    values_a = lookup[codes_a.long()]
+    values_b = lookup[codes_b.long()]
+    a = _pack_e2m1_pairs(codes_a).to(device)
+    # B is [K, N] and K is the packed axis, so pack along K by transposing the
+    # last two dimensions, packing, and transposing back.
+    b = _pack_e2m1_pairs(codes_b.transpose(-1, -2).contiguous())
+    b = b.transpose(-1, -2).contiguous().to(device)
+    groups = k // MX_GROUP_SIZE
+    scale_a = torch.full((blocks, m, groups), E8M0_UNIT_SCALE,
+                         dtype=torch.uint8, device=device)
+    scale_b = torch.full((blocks, n, groups), E8M0_UNIT_SCALE,
+                         dtype=torch.uint8, device=device)
+    c = torch.empty((2, blocks, m, n), dtype=torch.float32, device=device)
+    return a, b, c, (scale_a, scale_b), (values_a, values_b)
 
 
 def _peak_inputs(blocks: int, config: dict[str, int], dtype: torch.dtype, device):
@@ -625,6 +784,66 @@ def _validate_dot_lowering(device, dtype: torch.dtype, dtype_name: str, mode: st
                 "description": f"{dtype_name.upper()} tl.dot lowering probe"}
     raise TensorUnsupportedError(
         f"The backend cannot lower tl.dot for {dtype_name.upper()} operands at any "
+        f"tested tile shape: {'; '.join(failures)}")
+
+
+def _validate_fp4_arithmetic(device, mode: str, candidates: list[dict]) -> dict:
+    """Confirm the MX FP4 path computes real E2M1 products, bit for bit.
+
+    A lowering that compiles proves nothing about what it computes. FP4 is the
+    one format whose operands are carried in a container dtype (uint8), so a
+    backend that ignored the E2M1 interpretation and multiplied the raw bytes,
+    or dropped the scale factors, would still compile and still produce
+    plausible-looking numbers. This probe multiplies known E2M1 codes and
+    demands exact equality with the FP64 reference, then raises the A scale from
+    2**0 to 2**1 and demands the result exactly double: that rejects a path
+    which silently ignores the per-group scale.
+    """
+    failures = []
+    for config in candidates:
+        probe = {**config, "num_stages": 1}
+        m, n, k = probe["block_m"], probe["block_n"], probe["block_k"]
+        try:
+            torch.manual_seed(0)
+            a, b, c, scales, values = _fp4_peak_inputs(1, probe, device)
+            scale_a, scale_b = scales
+            values_a, values_b = values
+            _launch_peak(a, b, c, 1, probe, None, scales)
+            reference = _stack2(
+                values_a[0].matmul(values_b[0, 0]), values_a[0].matmul(values_b[1, 0]),
+            ).unsqueeze(1)
+            error = (c.cpu().double() - reference).abs().max().item()
+            if error != 0.0:
+                raise TensorUnsupportedError(
+                    "The backend did not compute MX FP4 tl.dot_scaled correctly: "
+                    f"max_abs_error={error} against the exact E2M1 reference")
+            # E8M0 code 128 encodes 2**1, so doubling A's scale must double C.
+            doubled = torch.empty_like(c)
+            _launch_peak(a, b, doubled, 1, probe, None,
+                         (torch.full_like(scale_a, E8M0_UNIT_SCALE + 1), scale_b))
+            scale_error = (doubled.cpu().double() - 2.0 * reference).abs().max().item()
+            if scale_error != 0.0:
+                raise TensorUnsupportedError(
+                    "The backend did not apply the E8M0 scale factor: raising A's scale "
+                    f"from 2**0 to 2**1 changed the result by max_abs_error={scale_error} "
+                    "from the exactly doubled reference")
+        except triton.OutOfResources as exc:
+            failures.append(f"{m}x{n}x{k}: resource limit ({exc})")
+            continue
+        except TensorUnsupportedError:
+            raise
+        except Exception as exc:
+            first_line = (str(exc).strip().splitlines()[0] if str(exc).strip()
+                          else type(exc).__name__)
+            failures.append(f"{m}x{n}x{k}: {first_line}")
+            continue
+        return {"passed": True, "kernel_mode": mode, "probed_tile": f"{m}x{n}x{k}",
+                "rejected_tiles": failures, "max_abs_error": 0.0,
+                "scale_sensitivity_verified": True,
+                "description": "MX FP4 (E2M1 packed two per uint8, E8M0 unit scales) "
+                               "tl.dot_scaled lowering, exact-product and scale-application probe"}
+    raise TensorUnsupportedError(
+        "The backend cannot lower tl.dot_scaled for MX FP4 (E2M1) operands at any "
         f"tested tile shape: {'; '.join(failures)}")
 
 
@@ -874,13 +1093,19 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
         # PPU-ZW810E), so extend the default occupancy sweep for this vendor.
         blocks_per_sm_values += [16, 32, 64]
     precision_text = (f"FP32 storage, {args.input_precision.upper()} dot precision"
-                      if args.dtype == "fp32" else f"{args.dtype} operands")
+                      if args.dtype == "fp32" else
+                      "MX FP4 (E2M1) operands with E8M0 group scales"
+                      if args.dtype == "fp4" else f"{args.dtype} operands")
     accumulator = _accumulator_name(args.dtype)
     unit = "TOPS" if args.dtype == "int8" else "TFLOP/s"
     print(f"\nMatrix peak: resident {precision_text}, two independent {accumulator.upper()} accumulator chains")
     if args.dtype == "fp8":
         print("FP8 E4M3FN: backend accumulation policy (internal precision is hardware-dependent); "
               "exact-check inputs")
+    if args.dtype == "fp4":
+        print(f"MX FP4 E2M1 via tl.dot_scaled: {FP4_PACKING_FACTOR} elements per uint8 container, "
+              f"one E8M0 scale per {MX_GROUP_SIZE} elements along K, all scales 2**0; "
+              "exact-check inputs. tile K counts E2M1 elements, not container bytes.")
     if vendor not in ("nvidia", "amd", "thead"):
         print(f"Instruction audit unavailable for {vendor}; native tensor execution is unverified.")
     print(f"Iterations={args.iterations}; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks")
@@ -894,10 +1119,14 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
             if free_bytes is not None and blocks * (m * k + 2 * k * n + 8 * m * n) * 8 > free_bytes * 0.8:
                 raise RuntimeError("Peak validation exceeds available memory; reduce --blocks-per-sm")
             try:
-                a, b, c = _peak_inputs(blocks, config, dtype, device)
+                scales = None
+                if args.dtype == "fp4":
+                    a, b, c, scales, fp4_values = _fp4_peak_inputs(blocks, config, device)
+                else:
+                    a, b, c = _peak_inputs(blocks, config, dtype, device)
                 c.fill_(-2**31 if dtype == torch.int8 else float("nan"))
                 compiled = _launch_peak(
-                    a, b, c, args.iterations, config, args.input_precision)
+                    a, b, c, args.iterations, config, args.input_precision, scales)
                 info = _compiled_info(
                     compiled, vendor, args.dtype, args.input_precision)
             except triton.OutOfResources as exc:
@@ -914,7 +1143,18 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                              "status": "unsupported", "reason": reason})
                 print(f"  config={config}: unsupported ({reason})")
                 continue
-            reference = _stack2(_reference(a, b[0]), _reference(a, b[1]))
+            if args.dtype == "fp4":
+                # The reference uses the FP64 values of the codes that were
+                # actually packed into the operands, so a packing mistake cannot
+                # cancel itself out between kernel and reference. Every exact
+                # entry is a multiple of 0.25 bounded by block_k, so narrowing
+                # the FP64 reference to the accumulator's FP32 is lossless.
+                values_a, values_b = fp4_values
+                reference = _stack2(values_a.matmul(values_b[0]),
+                                    values_a.matmul(values_b[1]))
+                reference = reference.to(torch.float32).to(c.device)
+            else:
+                reference = _stack2(_reference(a, b[0]), _reference(a, b[1]))
             reference.mul_(args.iterations)
             correctness = _validate_peak(c, reference, args.dtype, k, args.iterations)
             if info["spill_count"]:
@@ -924,7 +1164,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                 del a, b, c, reference
                 continue
             timing = measure(lambda: _launch_peak(
-                a, b, c, args.iterations, config, args.input_precision), args)
+                a, b, c, args.iterations, config, args.input_precision, scales), args)
             operations = 2 * m * n * k * args.iterations * config["chains"] * blocks
             rates = _rates(operations, timing, args.dtype)
             descriptor = _precision_descriptor(args.dtype, args.input_precision)
@@ -946,9 +1186,14 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
                    **descriptor,
                    "input_pattern": "random one-hot A; random signed B; dense tl.dot operations"
                    if args.dtype == "fp8" else "random ternary integers" if args.dtype == "int8"
+                   else "random E2M1 codes for +/-0.5 and +/-1.0, packed two per uint8; "
+                        "unit E8M0 scales; dense tl.dot_scaled operations"
+                   if args.dtype == "fp4"
                    else "random ternary exact binary fractions",
                    "accumulation_policy": "backend FP8 accumulation; internal precision is hardware-dependent"
                    if args.dtype == "fp8" else
+                   "MX E2M1 multiply with E8M0 group scaling and FP32 accumulation"
+                   if args.dtype == "fp4" else
                    "TF32 multiply with FP32 accumulation" if args.input_precision == "tf32" else
                    "IEEE FP32 multiply and accumulation" if args.dtype == "fp32" else
                    "exact INT32 accumulation (no overflow)" if args.dtype == "int8" else
@@ -999,9 +1244,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="launched CTAs per SM/CU (default: 1 2 4 8)")
     parser.add_argument("--sizes", nargs="+", type=int, default=[2048, 4096, 8192],
                         help="square GEMM dimensions M=N=K (default: 2048 4096 8192)")
-    parser.add_argument("--dtype", choices=("fp16", "bf16", "fp8", "fp32", "tf32", "int8", "fp64"),
+    parser.add_argument("--dtype",
+                        choices=("fp16", "bf16", "fp8", "fp4", "fp32", "tf32", "int8", "fp64"),
                         default="fp16",
-                        help="matrix input format; TF32 uses FP32 storage; FP8 is E4M3FN (peak only)")
+                        help="matrix input format; TF32 uses FP32 storage; FP8 is E4M3FN "
+                             "and FP4 is OCP MX E2M1 via tl.dot_scaled (both peak only)")
     parser.add_argument("--input-precision", choices=("ieee", "tf32"),
                         help="tl.dot math mode for --dtype fp32 (default: ieee); TF32 requires backend support")
     parser.add_argument("--quick", action="store_true",
@@ -1062,6 +1309,15 @@ def _capability_reason(args, metadata: dict) -> str | None:
         return f"FlagGems reports no FP64 support for {metadata['vendor_name']}"
     if args.dtype == "fp8" and args.mode != "peak":
         return "This benchmark implements FP8 E4M3FN in --mode peak only"
+    if args.dtype == "fp4" and args.mode != "peak":
+        return "This benchmark implements MX FP4 (E2M1) in --mode peak only"
+    if args.dtype == "fp4" and not hasattr(tl, "dot_scaled"):
+        # FP4 operands are only defined for the microscaled dot: OCP MX pairs
+        # every group of elements with a shared scale, and there is no unscaled
+        # tl.dot overload for a 4-bit format.
+        return ("This Triton build does not provide tl.dot_scaled, which MX FP4 (E2M1) "
+                "requires. This is a toolchain limitation, not a determination of chip "
+                "support")
     if (args.dtype == "fp8" and is_flagtree_xpu(metadata)
             and _backend_fp8_dtypes() == ()):
         # tl.dot rejects fp8 operands during compilation when the backend
@@ -1086,6 +1342,8 @@ def main() -> None:
         parser.error("--blocks-per-sm values must be positive")
     if args.dtype == "fp8" and args.iterations > 4096:
         parser.error("native FP8 peak limits --iterations to 4096 for exact internal accumulation")
+    if args.dtype == "fp4" and args.iterations > 4096:
+        parser.error("MX FP4 peak limits --iterations to 4096 for exact FP32 accumulation")
     if args.dtype == "int8" and args.mode == "gemm" and any(size >= 2**24 for size in args.sizes):
         parser.error("INT8 GEMM requires K < 2**24 for an exact FP32 reference")
     if args.quick:
@@ -1121,6 +1379,14 @@ def main() -> None:
                       else _configs(metadata["vendor_name"], args.dtype))
             metadata["tensor_dot_lowering_probe"] = _validate_dot_lowering(
                 device, dtype, args.dtype, args.mode, shapes, args.input_precision)
+        elif args.dtype == "fp4":
+            # Compiling is not enough for FP4: the operands ride in a uint8
+            # container, so a backend that ignored the E2M1 interpretation or
+            # the E8M0 scales would still compile. Probe arithmetic exactness
+            # and scale application before sweeping.
+            metadata["tensor_dot_lowering_probe"] = _validate_fp4_arithmetic(
+                device, args.mode,
+                _peak_configs(metadata["vendor_name"], args.dtype, args.input_precision))
     except Exception as exc:
         reason = _unsupported_reason(exc)
         if reason is None:

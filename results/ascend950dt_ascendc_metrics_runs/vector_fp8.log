@@ -1,0 +1,13 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | UB=216 KiB/core | 1650 MHz
+
+Vector peak: fp8, 12 independent chains, 4096 iterations, 64 lanes/register
+Arithmetic: the vector ISA has no FP8 arithmetic instruction, only FP8 conversion and movement, so each update converts FP8->FP32, issues a native FP32 FMA and converts back, keeping FP8 state; the conversions are overhead and are not counted, so this is a pipeline rate with FP8 operands, not a native FP8 vector peak
+Operations = 2 * 12 chains * 64 lanes * iterations * blocks
+  blocks  median ms     min ms   median TFLOP/s   peak TFLOP/s   check
+      64     0.09152    0.09150             4.400           4.400  exact
+     128     0.18202    0.18200             4.424           4.425  exact
+     256     0.36254    0.36250             4.443           4.443  exact
+     512     0.72321    0.72312             4.454           4.455  exact
+
+Measured vector fp8 peak: 4.455 TFLOP/s (same configuration median 4.454 TFLOP/s) at 512 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/vector_fp8.json

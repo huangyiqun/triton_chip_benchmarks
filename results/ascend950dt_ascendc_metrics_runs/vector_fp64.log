@@ -1,0 +1,3 @@
+Device 0: Ascend950DT_9582 (arch 3510)
+UNSUPPORTED: The Ascend 950DT RegBase vector ISA exposes no FP64 vector type or double-precision arithmetic: there is no 64-bit float vector register type and no double-precision asc_madd, asc_fma or asc_mul
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/vector_fp64.json

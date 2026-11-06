@@ -1,0 +1,37 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+Device npu:0: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems shim-torch_npu-2.10.0.post7, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+FP16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: events via FlagGems ascend device events
+          8    256      4       1          0    1.89393        4.536      4.537
+          8    256      4       4          0    0.85397       10.059     10.062
+          8    256      4       8          0    0.70453       12.192     12.195
+          8    256      8       1          0    1.89412        4.535      4.536
+          8    256      8       4          0    0.85397       10.059     10.062
+          8    256      8       8          0    0.70511       12.182     12.190
+          8    512      4       1          0    2.29287        7.493      7.494
+          8    512      4       4          0    1.29736       13.242     13.245
+          8    512      4       8          0    1.14578       14.994     14.999
+          8    512      8       1          0    2.29287        7.493      7.495
+          8    512      8       4          0    1.29737       13.242     13.245
+          8    512      8       8          0    1.14564       14.996     15.001
+         16    256      4       1          0    3.78683        4.537      4.538
+         16    256      4       4          0    1.70586       10.071     10.074
+         16    256      4       8          0    1.40687       12.211     12.216
+         16    256      8       1          0    3.78746        4.536      4.538
+         16    256      8       4          0    1.70598       10.070     10.076
+         16    256      8       8          0    1.40708       12.210     12.214
+         16    512      4       1          0    4.58133        7.500      7.501
+         16    512      4       4          0    2.59226       13.255     13.258
+         16    512      4       8          0    2.28841       15.015     15.020
+         16    512      8       1          0    4.58164        7.499      7.500
+         16    512      8       4          0    2.59190       13.257     13.270
+         16    512      8       8          0    2.28842       15.015     15.023
+Peak measured FP16 vector workload throughput: 15.023 TFLOP/s (median 15.015 TFLOP/s; blocks/unit=16, block=512, unroll=8, warps=8)
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_metrics_runs/vector_fp16.json

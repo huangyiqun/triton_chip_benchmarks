@@ -1,0 +1,108 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | L2=128 MiB | HBM=91.75 GiB (free 91.05 GiB)
+
+Memory capacity: 91.75 GiB (98515812352 bytes), reported by the runtime
+
+Bandwidth: UB-staged streaming, two groups of 16384 FP32 in flight per block
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + per-block FP32 sink
+Peak eligibility requires a buffer of at least 4x L2 (512 MiB)
+mode   buffer MiB  blocks   chunk    median ms     min ms   peak GB/s  median GB/s  eligible  check
+copy         512      32    2048       0.3558     0.3551     3023.64      3017.90  yes       exact
+copy         512      32    4096       0.3544     0.3536     3036.97      3030.12  yes       exact
+copy         512      32    8192       0.3535     0.3530     3041.75      3037.59  yes       exact
+copy         512      64    2048       0.3272     0.3268     3285.83      3282.06  yes       exact
+copy         512      64    4096       0.3272     0.3268     3285.37      3281.43  yes       exact
+copy         512      64    8192       0.3274     0.3270     3283.29      3279.81  yes       exact
+copy         512     128    2048       0.3231     0.3228     3326.23      3323.10  yes       exact
+copy         512     128    4096       0.3232     0.3229     3325.54      3322.38  yes       exact
+copy         512     128    8192       0.3233     0.3228     3325.98      3321.45  yes       exact
+copy         512     256    2048       0.3249     0.3243     3310.62      3305.26  yes       exact
+copy         512     256    4096       0.3248     0.3245     3308.63      3305.92  yes       exact
+copy         512     256    8192       0.3248     0.3246     3308.34      3305.57  yes       exact
+read         512      32    2048       0.2267     0.2261     2374.17      2368.27  yes       exact
+read         512      32    4096       0.2196     0.2191     2450.54      2444.74  yes       exact
+read         512      32    8192       0.2167     0.2163     2482.29      2477.54  yes       exact
+read         512      64    2048       0.1416     0.1411     3803.64      3792.25  yes       exact
+read         512      64    4096       0.1402     0.1399     3837.63      3829.53  yes       exact
+read         512      64    8192       0.1396     0.1392     3855.64      3844.78  yes       exact
+read         512     128    2048       0.1415     0.1413     3799.13      3794.16  yes       exact
+read         512     128    4096       0.1403     0.1401     3832.93      3827.66  yes       exact
+read         512     128    8192       0.1397     0.1396     3845.82      3842.04  yes       exact
+read         512     256    2048       0.1449     0.1448     3707.58      3705.54  yes       exact
+read         512     256    4096       0.1435     0.1434     3744.04      3742.35  yes       exact
+read         512     256    8192       0.1429     0.1427     3761.58      3756.74  yes       exact
+copy        1024      32    2048       0.7164     0.7102     3023.96      2997.73  yes       exact
+copy        1024      32    4096       0.7130     0.7107     3021.74      3011.72  yes       exact
+copy        1024      32    8192       0.7109     0.7069     3037.92      3020.94  yes       exact
+copy        1024      64    2048       0.6739     0.6700     3205.17      3186.52  yes       exact
+copy        1024      64    4096       0.6715     0.6673     3218.03      3197.86  yes       exact
+copy        1024      64    8192       0.6721     0.6683     3213.41      3195.21  yes       exact
+copy        1024     128    2048       0.6454     0.6446     3331.70      3327.13  yes       exact
+copy        1024     128    4096       0.6458     0.6453     3328.14      3325.29  yes       exact
+copy        1024     128    8192       0.6459     0.6453     3327.65      3324.84  yes       exact
+copy        1024     256    2048       0.6429     0.6425     3342.58      3340.25  yes       exact
+copy        1024     256    4096       0.6430     0.6425     3342.32      3339.86  yes       exact
+copy        1024     256    8192       0.6430     0.6424     3342.71      3339.70  yes       exact
+read        1024      32    2048       0.4506     0.4493     2389.74      2382.93  yes       exact
+read        1024      32    4096       0.4378     0.4365     2460.14      2452.68  yes       exact
+read        1024      32    8192       0.4324     0.4312     2490.29      2483.13  yes       exact
+read        1024      64    2048       0.2871     0.2854     3762.63      3739.45  yes       exact
+read        1024      64    4096       0.2834     0.2826     3798.88      3788.78  yes       exact
+read        1024      64    8192       0.2821     0.2812     3818.73      3806.33  yes       exact
+read        1024     128    2048       0.2790     0.2784     3857.23      3848.34  yes       exact
+read        1024     128    4096       0.2762     0.2758     3893.43      3887.40  yes       exact
+read        1024     128    8192       0.2753     0.2748     3907.95      3900.37  yes       exact
+read        1024     256    2048       0.2794     0.2792     3846.30      3842.47  yes       exact
+read        1024     256    4096       0.2770     0.2768     3879.80      3876.68  yes       exact
+read        1024     256    8192       0.2761     0.2758     3893.21      3889.28  yes       exact
+copy        2048      32    2048       1.4072     1.4015     3064.49      3052.07  yes       exact
+copy        2048      32    4096       1.4009     1.3941     3080.88      3065.81  yes       exact
+copy        2048      32    8192       1.3963     1.3926     3084.12      3075.95  yes       exact
+copy        2048      64    2048       1.3149     1.3002     3303.20      3266.46  yes       exact
+copy        2048      64    4096       1.3132     1.3013     3300.43      3270.50  yes       exact
+copy        2048      64    8192       1.3144     1.3030     3296.14      3267.72  yes       exact
+copy        2048     128    2048       1.3051     1.2969     3311.83      3291.02  yes       exact
+copy        2048     128    4096       1.3035     1.2976     3309.90      3294.95  yes       exact
+copy        2048     128    8192       1.3042     1.2987     3307.08      3293.23  yes       exact
+copy        2048     256    2048       1.2921     1.2892     3331.39      3324.08  yes       exact
+copy        2048     256    4096       1.2914     1.2874     3336.28      3325.80  yes       exact
+copy        2048     256    8192       1.2924     1.2891     3331.83      3323.27  yes       exact
+read        2048      32    2048       0.9000     0.8965     2395.44      2386.02  yes       exact
+read        2048      32    4096       0.8743     0.8721     2462.54      2456.24  yes       exact
+read        2048      32    8192       0.8633     0.8613     2493.33      2487.41  yes       exact
+read        2048      64    2048       0.5593     0.5575     3852.07      3839.68  yes       exact
+read        2048      64    4096       0.5540     0.5519     3891.41      3876.63  yes       exact
+read        2048      64    8192       0.5518     0.5498     3905.96      3892.05  yes       exact
+read        2048     128    2048       0.5586     0.5572     3854.38      3844.32  yes       exact
+read        2048     128    4096       0.5525     0.5501     3904.14      3886.89  yes       exact
+read        2048     128    8192       0.5501     0.5483     3916.48      3903.90  yes       exact
+read        2048     256    2048       0.5549     0.5536     3879.15      3870.14  yes       exact
+read        2048     256    4096       0.5498     0.5487     3913.92      3905.99  yes       exact
+read        2048     256    8192       0.5479     0.5471     3925.13      3919.26  yes       exact
+copy        4096      32    2048       2.8240     2.8182     3048.05      3041.77  yes       exact
+copy        4096      32    4096       2.8105     2.8024     3065.26      3056.33  yes       exact
+copy        4096      32    8192       2.8053     2.7920     3076.59      3062.09  yes       exact
+copy        4096      64    2048       2.6123     2.6013     3302.21      3288.26  yes       exact
+copy        4096      64    4096       2.6126     2.6058     3296.41      3287.87  yes       exact
+copy        4096      64    8192       2.6132     2.6043     3298.38      3287.13  yes       exact
+copy        4096     128    2048       2.5872     2.5832     3325.33      3320.16  yes       exact
+copy        4096     128    4096       2.5865     2.5806     3328.71      3321.11  yes       exact
+copy        4096     128    8192       2.5890     2.5819     3326.96      3317.81  yes       exact
+copy        4096     256    2048       2.5855     2.5791     3330.58      3322.31  yes       exact
+copy        4096     256    4096       2.5853     2.5797     3329.85      3322.59  yes       exact
+copy        4096     256    8192       2.5844     2.5798     3329.70      3323.82  yes       exact
+read        4096      32    2048       1.8012     1.7930     2395.38      2384.48  yes       exact
+read        4096      32    4096       1.7496     1.7384     2470.71      2454.80  yes       exact
+read        4096      32    8192       1.7266     1.7187     2498.99      2487.59  yes       exact
+read        4096      64    2048       1.1122     1.1087     3873.93      3861.52  yes       exact
+read        4096      64    4096       1.1012     1.0969     3915.49      3900.10  yes       exact
+read        4096      64    8192       1.0952     1.0912     3936.05      3921.73  yes       exact
+read        4096     128    2048       1.1109     1.1067     3880.79      3866.24  yes       exact
+read        4096     128    4096       1.1027     1.0982     3910.99      3895.06  yes       exact
+read        4096     128    8192       1.0996     1.0934     3928.00      3906.00  yes       exact
+read        4096     256    2048       1.1053     1.1028     3894.56      3885.94  yes       exact
+read        4096     256    4096       1.0957     1.0939     3926.28      3919.78  yes       exact
+read        4096     256    8192       1.0937     1.0910     3936.72      3926.95  yes       exact
+
+Measured copy bandwidth: 3342.71 GB/s (3.343 TB/s), same configuration median 3339.70 GB/s, at 1024 MiB per buffer, 256 blocks, 8192-element chunks
+Measured read bandwidth: 3936.72 GB/s (3.937 TB/s), same configuration median 3926.95 GB/s, at 4096 MiB, 256 blocks, 8192-element chunks
+JSON: /tmp/bw_rollup_runs/memory_bandwidth.json

@@ -17,10 +17,10 @@ METRICS = (
     Metric("memory_bandwidth", "Memory", None, "GB/s"),
     *(Metric(f"tensor_{dtype}", "Tensor", dtype,
              "TOP/s" if dtype == "int8" else "TFLOP/s")
-      for dtype in ("bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8")),
+      for dtype in ("bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8", "fp4")),
     *(Metric(f"vector_{dtype}", "Vector", dtype,
              "TOP/s" if dtype == "int8" else "TFLOP/s")
-      for dtype in ("bf16", "fp16", "fp32", "int8", "fp64", "fp8")),
+      for dtype in ("bf16", "fp16", "fp32", "int8", "fp64", "fp8", "fp4")),
 )
 
 

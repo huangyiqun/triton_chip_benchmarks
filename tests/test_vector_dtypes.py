@@ -19,8 +19,29 @@ class VectorDtypeTests(unittest.TestCase):
     def test_all_requested_types_parse_and_fp32_remains_default(self):
         parser = vector.build_parser()
         self.assertEqual(parser.parse_args([]).dtype, "fp32")
-        for dtype in ("bf16", "fp16", "fp32", "int8", "fp64", "fp8"):
+        for dtype in ("bf16", "fp16", "fp32", "int8", "fp64", "fp8", "fp4"):
             self.assertEqual(parser.parse_args(["--dtype", dtype]).dtype, dtype)
+
+    def test_fp4_is_refused_as_a_vector_arithmetic_type_with_evidence(self):
+        # FP4 has no arithmetic element type in Triton, so no FP4 multiply-add
+        # exists to measure. The refusal must not depend on a device, and must
+        # carry the checked fact rather than only prose.
+        reason = vector.unsupported_dtype_reason("fp4", {})
+        self.assertIsNotNone(reason)
+        self.assertIn("not an arithmetic element type", reason)
+        self.assertIn("tensor_fp4", reason)
+        probe = vector._fp4_vector_rejection_detail()
+        self.assertFalse(probe["triton_provides_fp4_element_type"])
+        self.assertEqual(probe["triton_fp4_scalar_dtypes"], [])
+
+    def test_fp4_refusal_does_not_depend_on_the_container_dtype_being_present(self):
+        # The blocker is the missing arithmetic type, so the refusal has to hold
+        # on a PyTorch build without float4_e2m1fn_x2 as well, and must not be
+        # reported as a mere storage gap.
+        with mock.patch.dict(vector.DTYPES, {"fp4": None}):
+            reason = vector.unsupported_dtype_reason("fp4", {})
+        self.assertIn("not an arithmetic element type", reason)
+        self.assertNotIn("does not expose FP4 storage", reason)
 
     def test_integer_ops_use_tops_and_floats_use_tflops(self):
         timing = {"median_ms": 2.0, "min_ms": 1.0}

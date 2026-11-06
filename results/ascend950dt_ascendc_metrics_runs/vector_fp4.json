@@ -1,0 +1,121 @@
+{
+    "benchmark": "vector_peak",
+    "dtype": "fp4",
+    "unit": "TFLOP/s",
+    "chains": 12,
+    "lanes_per_register": 128,
+    "iterations": 4096,
+    "arithmetic_kind": "converted_bf16_madd_fp4_state",
+    "arithmetic_note": "the vector ISA has no FP4 arithmetic instruction, only FP4 conversion and movement, so each update converts FP4->BF16, issues a native BF16 FMA and converts back, keeping FP4 state; the conversions are overhead and are not counted, so this is a pipeline rate with FP4 operands, not a native FP4 vector peak",
+    "native_arithmetic": false,
+    "operation_count_formula": "2 * chains * lanes * iterations * blocks",
+    "results": [
+      {
+        "blocks": 64,
+        "blocks_per_core": 1,
+        "iterations": 4096,
+        "operation_count": 805306368,
+        "peak_throughput": 8.800981885,
+        "median_throughput": 8.798877792,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.09150187769,
+          "median_ms": 0.09152375872,
+          "max_ms": 0.09156703949,
+          "launches_per_batch": 107,
+          "sample_count": 21,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 128,
+        "blocks_per_core": 2,
+        "iterations": 4096,
+        "operation_count": 1610612736,
+        "peak_throughput": 8.850697467,
+        "median_throughput": 8.849675461,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.1819757982,
+          "median_ms": 0.1819968137,
+          "max_ms": 0.1820206729,
+          "launches_per_batch": 55,
+          "sample_count": 20,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 256,
+        "blocks_per_core": 4,
+        "iterations": 4096,
+        "operation_count": 3221225472,
+        "peak_throughput": 8.886443676,
+        "median_throughput": 8.885361424,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.362487581,
+          "median_ms": 0.3625317326,
+          "max_ms": 0.3626618915,
+          "launches_per_batch": 27,
+          "sample_count": 21,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 512,
+        "blocks_per_core": 8,
+        "iterations": 4096,
+        "operation_count": 6442450944,
+        "peak_throughput": 8.909923258,
+        "median_throughput": 8.908817486,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.7230646951,
+          "median_ms": 0.7231544427,
+          "max_ms": 0.7232134683,
+          "launches_per_batch": 14,
+          "sample_count": 20,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      }
+    ],
+    "status": "measured_widened",
+    "value": 8.909923258,
+    "median_value": 8.908817486,
+    "best_blocks": 512,
+    "device": {
+      "device_id": 0,
+      "soc_name": "Ascend950DT_9582",
+      "npu_arch": 3510,
+      "aicore_count": 32,
+      "cube_core_count": 32,
+      "vector_core_count": 64,
+      "ub_bytes_per_vector_core": 221184,
+      "total_memory_bytes": 98515812352,
+      "memory_capacity_gib": 91.75,
+      "l2_cache_bytes": 134217728,
+      "aicore_freq_mhz": 1650,
+      "free_memory_bytes": 97761136640,
+      "query_source": "aclrtGetDeviceInfo / aclrtGetSocName"
+    }
+}

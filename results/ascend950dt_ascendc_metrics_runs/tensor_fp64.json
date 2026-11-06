@@ -1,0 +1,25 @@
+{
+    "benchmark": "cube_tensor_peak",
+    "dtype": "fp64",
+    "status": "unsupported",
+    "reason": "The Ascend 950DT Cube matrix unit exposes no FP64 instruction: asc_mmad and asc_mmad_mx provide overloads for bfloat16_t, half, float, int8_t, int4b_t, fp8_e4m3fn_t, fp8_e5m2_t, hifloat8_t and the fp4x2 types, and no double-precision overload exists",
+    "determined_from": "Ascend C C API instruction set for dav-3510; no measurement attempted",
+    "value": null,
+    "median_value": null,
+    "unit": "TFLOP/s",
+    "device": {
+      "device_id": 0,
+      "soc_name": "Ascend950DT_9582",
+      "npu_arch": 3510,
+      "aicore_count": 32,
+      "cube_core_count": 32,
+      "vector_core_count": 64,
+      "ub_bytes_per_vector_core": 221184,
+      "total_memory_bytes": 98515812352,
+      "memory_capacity_gib": 91.75,
+      "l2_cache_bytes": 134217728,
+      "aicore_freq_mhz": 1650,
+      "free_memory_bytes": 97764175872,
+      "query_source": "aclrtGetDeviceInfo / aclrtGetSocName"
+    }
+}

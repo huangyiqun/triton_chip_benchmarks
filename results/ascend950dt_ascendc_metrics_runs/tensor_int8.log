@@ -1,0 +1,28 @@
+Device 0: Ascend950DT_9582 (arch 3510) | cube cores=32 vector cores=64 | L2=128 MiB | HBM=91.75 GiB (free 91.05 GiB) | 1650 MHz
+
+Cube matrix peak: int8 operands, resident L0A/L0B, 1024 MMAD iterations per launch
+Operations = 2 * M * N * K * iterations * blocks; peak uses the shortest timed sample
+  tile M/N/K    blocks   median ms     min ms   median TOP/s     peak TOP/s     check
+  128/256/256         32     0.63926    0.63916            859.99          860.12  exact
+  128/256/256         64     1.27824    1.27787            860.18          860.42  exact
+  128/256/256        128     2.55410    2.55386            860.98          861.06  exact
+  128/256/256        256     5.10572    5.10547            861.40          861.44  exact
+  256/128/256         32     0.63924    0.63918            860.01          860.10  exact
+  256/128/256         64     1.27819    1.27792            860.21          860.39  exact
+  256/128/256        128     2.55423    2.55390            860.93          861.04  exact
+  256/128/256        256     5.10612    5.10576            861.33          861.39  exact
+  128/128/512         32     0.63919    0.63908            860.08          860.23  exact
+  128/128/512         64     1.27811    1.27792            860.26          860.39  exact
+  128/128/512        128     2.55400    2.55370            861.01          861.11  exact
+  128/128/512        256     5.10574    5.10551            861.39          861.43  exact
+  128/128/256         32     0.32037    0.32033            857.99          858.10  exact
+  128/128/256         64     0.64022    0.64016            858.69          858.77  exact
+  128/128/256        128     1.28025    1.28000            858.83          858.99  exact
+  128/128/256        256     2.55807    2.55787            859.64          859.71  exact
+  256/256/128         32     0.63965    0.63953            859.46          859.63  exact
+  256/256/128         64     1.27895    1.27868            859.70          859.88  exact
+  256/256/128        128     2.55551    2.55517            860.50          860.62  exact
+  256/256/128        256     5.10867    5.10850            860.90          860.93  exact
+
+Measured Cube int8 peak: 861.44 TOP/s (same configuration median 861.40 TOP/s) at tile 128/256/256, 256 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/tensor_int8.json

@@ -1,0 +1,28 @@
+Device 0: Ascend950DT_9582 (arch 3510) | cube cores=32 vector cores=64 | L2=128 MiB | HBM=91.75 GiB (free 91.05 GiB) | 1650 MHz
+
+Cube matrix peak: fp32 operands, resident L0A/L0B, 1024 MMAD iterations per launch
+Operations = 2 * M * N * K * iterations * blocks; peak uses the shortest timed sample
+  tile M/N/K    blocks   median ms     min ms   median TFLOP/s   peak TFLOP/s   check
+  128/128/64          32     2.54729    2.54707             26.98           26.98  exact
+  128/128/64          64     5.09205    5.09194             26.99           26.99  exact
+  128/128/64         128    10.18182   10.18165             27.00           27.00  exact
+  128/128/64         256    20.36162   20.36125             27.00           27.00  exact
+  128/256/64          32     5.09134    5.09117             26.99           27.00  exact
+  128/256/64          64    10.18037   10.18018             27.00           27.00  exact
+  128/256/64         128    20.35904   20.35876             27.00           27.00  exact
+  128/256/64         256    40.71637   40.71564             27.00           27.00  exact
+  256/128/64          32     5.09140    5.09130             26.99           26.99  exact
+  256/128/64          64    10.18089   10.18042             27.00           27.00  exact
+  256/128/64         128    20.35949   20.35907             27.00           27.00  exact
+  256/128/64         256    40.71568   40.71450             27.00           27.01  exact
+   64/64/128         32     1.27510    1.27496             26.95           26.95  exact
+   64/64/128         64     2.54801    2.54776             26.97           26.97  exact
+   64/64/128        128     5.09392    5.09364             26.98           26.98  exact
+   64/64/128        256    10.18593   10.18576             26.99           26.99  exact
+   64/128/64          32     1.27497    1.27478             26.95           26.95  exact
+   64/128/64          64     2.54794    2.54778             26.97           26.97  exact
+   64/128/64         128     5.09367    5.09341             26.98           26.98  exact
+   64/128/64         256    10.18544   10.18502             26.99           26.99  exact
+
+Measured Cube fp32 peak: 27.01 TFLOP/s (same configuration median 27.00 TFLOP/s) at tile 256/128/64, 256 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/tensor_fp32.json

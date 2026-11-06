@@ -1,0 +1,83 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:1: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+FP8 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+Backend cannot compile scalar coefficients for FP8 (compiler abort: unsupported type cast); coefficients are loaded as broadcast vectors instead: ///------------------[ERROR][Triton][BEG]------------------
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems ascend device events
+          8    256      4       1          0    6.39887        1.342      1.343
+          8    256      4       4          0    2.32689        3.692      3.692
+          8    256      4       8          0    1.91754        4.480      4.480
+          8    256      4      16          0    1.90899        4.500      4.500
+          8    256      8       1          0    6.39930        1.342      1.343
+          8    256      8       4          0    2.32701        3.691      3.692
+          8    256      8       8          0    1.91743        4.480      4.481
+          8    256      8      16          0    1.90898        4.500      4.501
+          8    512      4       1          0   11.06761        1.552      1.552
+          8    512      4       4          0    3.98773        4.308      4.309
+          8    512      4       8          0    3.44071        4.993      4.994
+          8    512      4      16          0    3.60787        4.762      4.762
+          8    512      8       1          0   11.06695        1.552      1.553
+          8    512      8       4          0    3.98732        4.309      4.309
+          8    512      8       8          0    3.44182        4.992      4.993
+          8    512      8      16          0    3.60795        4.762      4.762
+          8   1024      4       1          0   20.28907        1.694      1.694
+          8   1024      4       4          0    7.37950        4.656      4.656
+          8   1024      4       8          0    6.51574        5.273      5.274
+          8   1024      4      16          0    7.00567        4.905      4.906
+          8   1024      8       1          0   20.28794        1.694      1.694
+          8   1024      8       4          0    7.37972        4.656      4.657
+          8   1024      8       8          0    6.51444        5.274      5.275
+          8   1024      8      16          0    7.00505        4.905      4.905
+          8   2048      4       1          0   38.73232        1.774      1.774
+          8   2048      4       4          0   14.16245        4.852      4.853
+          8   2048      4       8          0   12.66323        5.427      5.428
+          8   2048      4      16          0   13.80205        4.979      4.979
+          8   2048      8       1          0   38.73179        1.774      1.774
+          8   2048      8       4          0   14.16563        4.851      4.852
+          8   2048      8       8          0   12.66434        5.426      5.426
+          8   2048      8      16          0   13.80321        4.979      4.979
+         16    256      4       1          0   12.79508        1.343      1.343
+         16    256      4       4          0    4.64995        3.695      3.695
+         16    256      4       8          0    3.83230        4.483      4.484
+         16    256      4      16          0    3.81422        4.504      4.505
+         16    256      8       1          0   12.79750        1.342      1.343
+         16    256      8       4          0    4.64983        3.695      3.695
+         16    256      8       8          0    3.83188        4.483      4.484
+         16    256      8      16          0    3.81502        4.503      4.504
+         16    512      4       1          0   22.11663        1.554      1.554
+         16    512      4       4          0    7.97061        4.311      4.311
+         16    512      4       8          0    6.87727        4.996      4.997
+         16    512      4      16          0    7.21163        4.764      4.765
+         16    512      8       1          0   22.11734        1.554      1.554
+         16    512      8       4          0    7.97004        4.311      4.312
+         16    512      8       8          0    6.87774        4.996      4.997
+         16    512      8      16          0    7.21106        4.765      4.765
+         16   1024      4       1          0   40.56092        1.694      1.694
+         16   1024      4       4          0   14.75368        4.658      4.658
+         16   1024      4       8          0   13.02855        5.275      5.275
+         16   1024      4      16          0   14.00816        4.906      4.906
+         16   1024      8       1          0   40.55640        1.694      1.695
+         16   1024      8       4          0   14.75438        4.658      4.658
+         16   1024      8       8          0   13.02672        5.275      5.276
+         16   1024      8      16          0   14.00637        4.906      4.907
+         16   2048      4       1          0   77.44750        1.775      1.775
+         16   2048      4       4          0   28.31109        4.855      4.855
+         16   2048      4       8          0   25.31751        5.429      5.429
+         16   2048      4      16          0   27.58982        4.982      4.982
+         16   2048      8       1          0   77.44647        1.775      1.775
+         16   2048      8       4          0   28.31251        4.854      4.855
+         16   2048      8       8          0   25.31648        5.429      5.430
+         16   2048      8      16          0   27.59014        4.981      4.982
+Peak measured FP8 vector workload throughput: 5.430 TFLOP/s (median 5.429 TFLOP/s; blocks/unit=16, block=2048, unroll=8, warps=8)
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_17metrics_runs/vector_fp8.json

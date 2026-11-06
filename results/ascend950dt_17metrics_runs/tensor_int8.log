@@ -1,0 +1,41 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:1: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident int8 operands, two independent INT32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
+Timing: graph via FlagGems ascend device events
+   32/32/64          1      4     0.2864    0.2863        59.99      60.00     0
+   32/32/64          2      4     0.5711    0.5706        60.17      60.22     0
+   32/32/64          4      4     1.1416    1.1403        60.20      60.26     0
+   32/32/64          8      4     2.2823    2.2793        60.22      60.30     0
+   64/64/64          1      4     0.2528    0.2528       271.78     271.82     0
+   64/64/64          2      4     0.5016    0.5016       273.98     274.01     0
+   64/64/64          4      4     0.9994    0.9993       275.05     275.07     0
+   64/64/64          8      4     1.9944    1.9942       275.66     275.68     0
+128/128/128          1      4     0.6427    0.6426       855.38     855.51     0
+128/128/128          2      4     1.2805    1.2804       858.63     858.70     0
+128/128/128          4      4     2.5576    2.5571       859.80     859.96     0
+128/128/128          8      4     5.1172    5.1163       859.46     859.61     0
+256/128/128          1      4     1.2804    1.2803       858.71     858.78     0
+256/128/128          2      4     2.5561    2.5554       860.31     860.54     0
+256/128/128          4      4     5.1137    5.1128       860.05     860.21     0
+256/128/128          8      4    10.2215   10.2191       860.54     860.75     0
+128/256/128          1      4     1.2806    1.2804       858.60     858.74     0
+128/256/128          2      4     2.5563    2.5561       860.24     860.32     0
+128/256/128          4      4     5.1137    5.1129       860.06     860.19     0
+128/256/128          8      4    10.2250   10.2226       860.25     860.46     0
+Measured tl.dot throughput (native execution unverified): 860.75 TOPS (same configuration median 860.54 TOPS; best observed timing sample, dense int8)
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_17metrics_runs/tensor_int8.json

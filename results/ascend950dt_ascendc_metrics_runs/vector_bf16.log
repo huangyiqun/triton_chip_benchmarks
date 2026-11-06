@@ -1,0 +1,13 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | UB=216 KiB/core | 1650 MHz
+
+Vector peak: bf16, 12 independent chains, 4096 iterations, 128 lanes/register
+Arithmetic: native in-place asc_madd on vector_bfloat16_t; BF16 state
+Operations = 2 * 12 chains * 128 lanes * iterations * blocks
+  blocks  median ms     min ms   median TFLOP/s   peak TFLOP/s   check
+      64     0.03190    0.03189            25.247          25.256  exact
+     128     0.06278    0.06276            25.657          25.663  exact
+     256     0.12408    0.12406            25.961          25.965  exact
+     512     0.24620    0.24615            26.167          26.173  exact
+
+Measured vector bf16 peak: 26.173 TFLOP/s (same configuration median 26.167 TFLOP/s) at 512 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/vector_bf16.json

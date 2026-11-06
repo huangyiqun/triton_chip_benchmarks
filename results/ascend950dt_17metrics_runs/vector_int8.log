@@ -1,0 +1,84 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:1: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 4096 iterations; 2 operations per update
+Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+Timing: graph via FlagGems ascend device events
+          8    256      4       1          0    5.05639        1.699      1.699
+          8    256      4       4          0    5.25421        1.635      1.635
+          8    256      4       8          0    6.55189        1.311      1.311
+          8    256      4      16          0    8.64453        0.994      0.994
+          8    256      8       1          0    5.05653        1.699      1.699
+          8    256      8       4          0    5.25417        1.635      1.635
+          8    256      8       8          0    6.55271        1.311      1.311
+          8    256      8      16          0    8.64547        0.994      0.994
+          8    512      4       1          0    8.43393        2.037      2.037
+          8    512      4       4          0    9.71773        1.768      1.768
+          8    512      4       8          0   12.55875        1.368      1.368
+          8    512      4      16          0   16.79921        1.023      1.023
+          8    512      8       1          0    8.43279        2.037      2.038
+          8    512      8       4          0    9.72116        1.767      1.768
+          8    512      8       8          0   12.55946        1.368      1.368
+          8    512      8      16          0   16.79922        1.023      1.023
+          8   1024      4       1          0   14.80445        2.321      2.321
+          8   1024      4       4          0   18.53448        1.854      1.854
+          8   1024      4       8          0   24.56076        1.399      1.399
+          8   1024      4      16          0   33.09075        1.038      1.038
+          8   1024      8       1          0   14.80526        2.321      2.321
+          8   1024      8       4          0   18.53448        1.854      1.854
+          8   1024      8       8          0   24.55991        1.399      1.399
+          8   1024      8      16          0   33.09450        1.038      1.038
+          8   2048      4       1          0   27.88860        2.464      2.464
+          8   2048      4       4          0   36.59782        1.878      1.878
+          8   2048      4       8          0   48.56397        1.415      1.415
+          8   2048      4      16          0   65.68257        1.046      1.046
+          8   2048      8       1          0   27.88893        2.464      2.464
+          8   2048      8       4          0   36.59817        1.878      1.878
+          8   2048      8       8          0   48.56418        1.415      1.415
+          8   2048      8      16          0   65.68383        1.046      1.046
+         16    256      4       1          0   10.11144        1.699      1.699
+         16    256      4       4          0   10.50410        1.636      1.636
+         16    256      4       8          0   13.10097        1.311      1.311
+         16    256      4      16          0   17.28937        0.994      0.994
+         16    256      8       1          0   10.11130        1.699      1.699
+         16    256      8       4          0   10.50711        1.635      1.635
+         16    256      8       8          0   13.10128        1.311      1.312
+         16    256      8      16          0   17.28918        0.994      0.994
+         16    512      4       1          0   16.86570        2.037      2.038
+         16    512      4       4          0   19.42552        1.769      1.769
+         16    512      4       8          0   25.10114        1.369      1.369
+         16    512      4      16          0   33.58374        1.023      1.023
+         16    512      8       1          0   16.86764        2.037      2.037
+         16    512      8       4          0   19.42656        1.769      1.769
+         16    512      8       8          0   25.10116        1.369      1.369
+         16    512      8      16          0   33.58274        1.023      1.023
+         16   1024      4       1          0   29.59311        2.322      2.322
+         16   1024      4       4          0   37.04952        1.855      1.855
+         16   1024      4       8          0   49.10238        1.400      1.400
+         16   1024      4      16          0   66.17170        1.039      1.039
+         16   1024      8       1          0   29.59674        2.322      2.322
+         16   1024      8       4          0   37.05295        1.855      1.855
+         16   1024      8       8          0   49.10179        1.400      1.400
+         16   1024      8      16          0   66.17260        1.038      1.039
+         16   2048      4       1          0   55.76081        2.465      2.465
+         16   2048      4       4          0   73.17949        1.878      1.878
+         16   2048      4       8          0   97.11250        1.415      1.415
+         16   2048      4      16          0  131.35219        1.046      1.046
+         16   2048      8       1          0   55.76075        2.465      2.465
+         16   2048      8       4          0   73.17678        1.878      1.878
+         16   2048      8       8          0   97.10875        1.415      1.415
+         16   2048      8      16          0  131.35305        1.046      1.046
+Peak measured INT8 vector workload throughput: 2.465 TOPS (median 2.465 TOPS; blocks/unit=16, block=2048, unroll=1, warps=4)
+This numeric result measures the typed INT8 source workload; it is not a verified native INT8 vector peak
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_17metrics_runs/vector_int8.json

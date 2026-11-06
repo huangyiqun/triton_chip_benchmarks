@@ -1,0 +1,25 @@
+{
+    "benchmark": "vector_peak",
+    "dtype": "fp64",
+    "status": "unsupported",
+    "reason": "The Ascend 950DT RegBase vector ISA exposes no FP64 vector type or double-precision arithmetic: there is no 64-bit float vector register type and no double-precision asc_madd, asc_fma or asc_mul",
+    "determined_from": "Ascend C C API instruction set for dav-3510; no measurement attempted",
+    "value": null,
+    "median_value": null,
+    "unit": "TFLOP/s",
+    "device": {
+      "device_id": 0,
+      "soc_name": "Ascend950DT_9582",
+      "npu_arch": 3510,
+      "aicore_count": 32,
+      "cube_core_count": 32,
+      "vector_core_count": 64,
+      "ub_bytes_per_vector_core": 221184,
+      "total_memory_bytes": 98515812352,
+      "memory_capacity_gib": 91.75,
+      "l2_cache_bytes": 134217728,
+      "aicore_freq_mhz": 1650,
+      "free_memory_bytes": 97764139008,
+      "query_source": "aclrtGetDeviceInfo / aclrtGetSocName"
+    }
+}

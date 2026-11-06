@@ -1,0 +1,59 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | L2=128 MiB | HBM=91.75 GiB (free 91.05 GiB)
+
+Memory capacity: 91.75 GiB (98515812352 bytes), reported by the runtime
+
+Bandwidth: UB-staged streaming, two groups of 16384 FP32 in flight per block
+Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + per-block FP32 sink
+Peak eligibility requires a buffer of at least 4x L2 (512 MiB)
+mode   buffer MiB  blocks   chunk    median ms     min ms   peak GB/s  median GB/s  eligible  check
+copy         512      32    2048       0.3555     0.3550     3024.72      3020.66  yes       exact
+copy         512      32    4096       0.3543     0.3530     3042.02      3030.92  yes       exact
+copy         512      32    8192       0.3535     0.3523     3047.63      3037.27  yes       exact
+copy         512      64    2048       0.3272     0.3269     3284.92      3281.87  yes       exact
+copy         512      64    4096       0.3272     0.3269     3284.42      3281.29  yes       exact
+copy         512      64    8192       0.3273     0.3268     3285.40      3280.92  yes       exact
+copy         512     128    2048       0.3231     0.3228     3326.44      3322.79  yes       exact
+copy         512     128    4096       0.3232     0.3229     3324.84      3322.58  yes       exact
+copy         512     128    8192       0.3232     0.3229     3325.42      3322.60  yes       exact
+copy         512     256    2048       0.3247     0.3243     3310.63      3306.64  yes       exact
+copy         512     256    4096       0.3247     0.3242     3311.49      3306.42  yes       exact
+copy         512     256    8192       0.3248     0.3246     3308.04      3306.21  yes       exact
+copy        1024      32    2048       0.7172     0.7125     3013.99      2994.30  yes       exact
+copy        1024      32    4096       0.7132     0.7094     3027.21      3010.86  yes       exact
+copy        1024      32    8192       0.7114     0.7079     3033.59      3018.78  yes       exact
+copy        1024      64    2048       0.6721     0.6694     3208.23      3195.29  yes       exact
+copy        1024      64    4096       0.6721     0.6691     3209.45      3194.96  yes       exact
+copy        1024      64    8192       0.6724     0.6675     3217.18      3193.75  yes       exact
+copy        1024     128    2048       0.6457     0.6446     3331.40      3325.85  yes       exact
+copy        1024     128    4096       0.6459     0.6453     3327.80      3324.54  yes       exact
+copy        1024     128    8192       0.6461     0.6456     3326.55      3323.86  yes       exact
+copy        1024     256    2048       0.6430     0.6426     3341.79      3339.65  yes       exact
+copy        1024     256    4096       0.6430     0.6424     3342.93      3339.59  yes       exact
+copy        1024     256    8192       0.6430     0.6422     3343.71      3339.60  yes       exact
+copy        2048      32    2048       1.4071     1.3998     3068.28      3052.28  yes       exact
+copy        2048      32    4096       1.4019     1.3932     3082.83      3063.60  yes       exact
+copy        2048      32    8192       1.3981     1.3897     3090.57      3071.96  yes       exact
+copy        2048      64    2048       1.3154     1.3036     3294.70      3265.26  yes       exact
+copy        2048      64    4096       1.3122     1.3014     3300.38      3272.98  yes       exact
+copy        2048      64    8192       1.3139     1.3003     3303.05      3268.77  yes       exact
+copy        2048     128    2048       1.3038     1.2961     3313.76      3294.28  yes       exact
+copy        2048     128    4096       1.3047     1.2974     3310.42      3291.98  yes       exact
+copy        2048     128    8192       1.3057     1.2963     3313.16      3289.45  yes       exact
+copy        2048     256    2048       1.2915     1.2891     3331.65      3325.48  yes       exact
+copy        2048     256    4096       1.2917     1.2893     3331.24      3325.01  yes       exact
+copy        2048     256    8192       1.2924     1.2892     3331.53      3323.28  yes       exact
+copy        4096      32    2048       2.8289     2.8151     3051.41      3036.47  yes       exact
+copy        4096      32    4096       2.8102     2.7994     3068.52      3056.65  yes       exact
+copy        4096      32    8192       2.8036     2.7931     3075.44      3063.85  yes       exact
+copy        4096      64    2048       2.6106     2.6021     3301.09      3290.43  yes       exact
+copy        4096      64    4096       2.6139     2.6041     3298.61      3286.29  yes       exact
+copy        4096      64    8192       2.6155     2.6064     3295.75      3284.29  yes       exact
+copy        4096     128    2048       2.5880     2.5837     3324.63      3319.20  yes       exact
+copy        4096     128    4096       2.5876     2.5779     3332.16      3319.67  yes       exact
+copy        4096     128    8192       2.5882     2.5839     3324.40      3318.90  yes       exact
+copy        4096     256    2048       2.5846     2.5753     3335.50      3323.56  yes       exact
+copy        4096     256    4096       2.5839     2.5787     3331.11      3324.41  yes       exact
+copy        4096     256    8192       2.5865     2.5820     3326.83      3321.08  yes       exact
+
+Measured copy bandwidth: 3343.71 GB/s (3.344 TB/s), same configuration median 3339.60 GB/s, at 1024 MiB per buffer, 256 blocks, 8192-element chunks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/memory_capacity.json

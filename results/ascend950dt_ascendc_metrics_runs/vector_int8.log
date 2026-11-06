@@ -1,0 +1,13 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | UB=216 KiB/core | 1650 MHz
+
+Vector peak: int8, 12 independent chains, 4096 iterations, 128 lanes/register
+Arithmetic: the vector ISA has asc_add for vector_int8_t but no 8-bit asc_mul, so INT8-range operands are multiplied and added in INT16; this is not a native INT8 vector multiply rate
+Operations = 2 * 12 chains * 128 lanes * iterations * blocks
+  blocks  median ms     min ms   median TOP/s     peak TOP/s     check
+      64     0.05176    0.05174            15.558          15.563  exact
+     128     0.10250    0.10249            15.713          15.715  exact
+     256     0.20349    0.20347            15.830          15.832  exact
+     512     0.40514    0.40507            15.902          15.905  exact
+
+Measured vector int8 peak: 15.905 TOP/s (same configuration median 15.902 TOP/s) at 512 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/vector_int8.json

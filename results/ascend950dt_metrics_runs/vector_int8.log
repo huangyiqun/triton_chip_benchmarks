@@ -1,0 +1,39 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+Device npu:0: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems shim-torch_npu-2.10.0.post7, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+INT8 vector: 8 independent INT8_MUL_ADD_MOD256 chains, 4096 iterations; 2 operations per update
+Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; native instruction verification requires explicit final ISA evidence
+blocks/unit  block  warps  unroll  registers  median_ms  median_TOPS  peak_TOPS
+Timing: events via FlagGems ascend device events
+          8    256      4       1          0    5.06068        1.697      1.698
+          8    256      4       4          0    5.25965        1.633      1.634
+          8    256      4       8          0    6.55592        1.310      1.311
+          8    256      8       1          0    5.06186        1.697      1.698
+          8    256      8       4          0    5.26024        1.633      1.634
+          8    256      8       8          0    6.55692        1.310      1.310
+          8    512      4       1          0    8.43997        2.036      2.036
+          8    512      4       4          0    9.72106        1.767      1.768
+          8    512      4       8          0   12.56976        1.367      1.368
+          8    512      8       1          0    8.43947        2.036      2.036
+          8    512      8       4          0    9.72221        1.767      1.767
+          8    512      8       8          0   12.57159        1.367      1.367
+         16    256      4       1          0   10.12346        1.697      1.698
+         16    256      4       4          0   10.51916        1.633      1.633
+         16    256      4       8          0   13.11299        1.310      1.310
+         16    256      8       1          0   10.12386        1.697      1.697
+         16    256      8       4          0   10.51915        1.633      1.634
+         16    256      8       8          0   13.11236        1.310      1.311
+         16    512      4       1          0   16.87800        2.036      2.036
+         16    512      4       4          0   19.44675        1.767      1.767
+         16    512      4       8          0   25.10938        1.368      1.369
+         16    512      8       1          0   16.87761        2.036      2.036
+         16    512      8       4          0   19.43989        1.767      1.768
+         16    512      8       8          0   25.11141        1.368      1.369
+Peak measured INT8 vector workload throughput: 2.036 TOPS (median 2.036 TOPS; blocks/unit=8, block=512, unroll=1, warps=4)
+This numeric result measures the typed INT8 source workload; it is not a verified native INT8 vector peak
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_metrics_runs/vector_int8.json

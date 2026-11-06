@@ -1,0 +1,13 @@
+Device 0: Ascend950DT_9582 (arch 3510) | vector cores=64 | UB=216 KiB/core | 1650 MHz
+
+Vector peak: fp4, 12 independent chains, 4096 iterations, 128 lanes/register
+Arithmetic: the vector ISA has no FP4 arithmetic instruction, only FP4 conversion and movement, so each update converts FP4->BF16, issues a native BF16 FMA and converts back, keeping FP4 state; the conversions are overhead and are not counted, so this is a pipeline rate with FP4 operands, not a native FP4 vector peak
+Operations = 2 * 12 chains * 128 lanes * iterations * blocks
+  blocks  median ms     min ms   median TFLOP/s   peak TFLOP/s   check
+      64     0.09152    0.09150             8.799           8.801  exact
+     128     0.18200    0.18198             8.850           8.851  exact
+     256     0.36253    0.36249             8.885           8.886  exact
+     512     0.72315    0.72306             8.909           8.910  exact
+
+Measured vector fp4 peak: 8.910 TFLOP/s (same configuration median 8.909 TFLOP/s) at 512 blocks
+JSON: /workspace/ascendc_chip_benchmarks/results/ascend950dt_metrics_runs/vector_fp4.json

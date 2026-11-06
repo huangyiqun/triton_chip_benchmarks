@@ -1,0 +1,82 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+/usr/local/python3.12.16/lib/python3.12/site-packages/torch_npu/npu/__init__.py:598: UserWarning: You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. The return value of get_device_capability is only for compatibility with PyTorch and does not represent the actual capability of the NPU device.
+  warnings.warn(f"You can set the device capability via the environment variable TORCH_NPU_DEVICE_CAPABILITY. {warning_str}")
+/workspace/FlagGems/src/flag_gems/utils/device_info.py:58: UserWarning: [device_info] torch_device_fn.get_device_capability returned None for device_id=0, fallback to (0, 0).
+  warnings.warn(
+[Note] No specialized common operators were found for the ascend, generic common operators will be used by default.
+Device npu:1: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems 5.5.0.dev0+gda6b2b845+gda6b2b845, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+BF16 vector: 8 independent FMA chains, 4096 iterations; 2 operations per update
+blocks/unit  block  warps  unroll  registers  median_ms  median_TFLOP/s  peak_TFLOP/s
+Timing: graph via FlagGems ascend device events
+          8    256      4       1          0    3.02275        2.842      2.842
+          8    256      4       4          0    2.61085        3.290      3.290
+          8    256      4       8          0    1.30671        6.574      6.574
+          8    256      4      16          0    1.31003        6.557      6.558
+          8    256      8       1          0    3.02271        2.842      2.842
+          8    256      8       4          0    2.61109        3.290      3.291
+          8    256      8       8          0    1.30681        6.573      6.574
+          8    256      8      16          0    1.31009        6.557      6.558
+          8    512      4       1          0    3.82520        4.491      4.491
+          8    512      4       4          0    4.42113        3.886      3.886
+          8    512      4       8          0    2.31759        7.413      7.414
+          8    512      4      16          0    2.32222        7.398      7.399
+          8    512      8       1          0    3.82394        4.493      4.493
+          8    512      8       4          0    4.42116        3.886      3.886
+          8    512      8       8          0    2.31950        7.407      7.416
+          8    512      8      16          0    2.32212        7.398      7.399
+          8   1024      4       1          0    5.41954        6.340      6.340
+          8   1024      4       4          0    8.04243        4.272      4.273
+          8   1024      4       8          0    4.28423        8.020      8.023
+          8   1024      4      16          0    4.18720        8.206      8.207
+          8   1024      8       1          0    5.41822        6.342      6.343
+          8   1024      8       4          0    8.04079        4.273      4.273
+          8   1024      8       8          0    4.28417        8.020      8.021
+          8   1024      8      16          0    4.18733        8.206      8.207
+          8   2048      4       1          0    8.60565        7.985      7.987
+          8   2048      4       4          0   15.28487        4.496      4.497
+          8   2048      4       8          0    8.20785        8.372      8.373
+          8   2048      4      16          0    7.73811        8.881      8.881
+          8   2048      8       1          0    8.60471        7.986      7.988
+          8   2048      8       4          0   15.28839        4.495      4.496
+          8   2048      8       8          0    8.20867        8.372      8.373
+          8   2048      8      16          0    7.73818        8.881      8.881
+         16    256      4       1          0    6.04341        2.843      2.843
+         16    256      4       4          0    5.21922        3.292      3.292
+         16    256      4       8          0    2.61132        6.579      6.580
+         16    256      4      16          0    2.61780        6.563      6.564
+         16    256      8       1          0    6.04308        2.843      2.843
+         16    256      8       4          0    5.21952        3.291      3.292
+         16    256      8       8          0    2.61073        6.580      6.581
+         16    256      8      16          0    2.61798        6.562      6.563
+         16    512      4       1          0    7.64553        4.494      4.494
+         16    512      4       4          0    8.83708        3.888      3.889
+         16    512      4       8          0    4.63158        7.419      7.420
+         16    512      4      16          0    4.64117        7.403      7.404
+         16    512      8       1          0    7.64554        4.494      4.495
+         16    512      8       4          0    8.83740        3.888      3.888
+         16    512      8       8          0    4.63238        7.417      7.418
+         16    512      8      16          0    4.64083        7.404      7.405
+         16   1024      4       1          0   10.83718        6.341      6.342
+         16   1024      4       4          0   16.08278        4.273      4.273
+         16   1024      4       8          0    8.56398        8.024      8.026
+         16   1024      4      16          0    8.36840        8.212      8.213
+         16   1024      8       1          0   10.83637        6.342      6.342
+         16   1024      8       4          0   16.07990        4.274      4.274
+         16   1024      8       8          0    8.56351        8.025      8.025
+         16   1024      8      16          0    8.37103        8.209      8.210
+         16   2048      4       1          0   17.20724        7.987      7.989
+         16   2048      4       4          0   30.55861        4.498      4.498
+         16   2048      4       8          0   16.41491        8.373      8.374
+         16   2048      4      16          0   15.47414        8.882      8.883
+         16   2048      8       1          0   17.21000        7.986      7.988
+         16   2048      8       4          0   30.56383        4.497      4.497
+         16   2048      8       8          0   16.41417        8.373      8.374
+         16   2048      8      16          0   15.47532        8.881      8.882
+Peak measured BF16 vector workload throughput: 8.883 TFLOP/s (median 8.882 TFLOP/s; blocks/unit=16, block=2048, unroll=16, warps=4)
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_17metrics_runs/vector_bf16.json

@@ -36,7 +36,13 @@ XPU_NARROW_DTYPES = ("fp16", "bf16", "int8")
 XPU_STATIC_ITERATIONS = 512
 DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32,
           "int8": torch.int8, "fp64": torch.float64,
-          "fp8": getattr(torch, "float8_e4m3fn", None)}
+          "fp8": getattr(torch, "float8_e4m3fn", None),
+          # FP4 has no arithmetic scalar dtype anywhere in this stack. PyTorch
+          # exposes float4_e2m1fn_x2, which is a *container* holding two E2M1
+          # elements per byte rather than a scalar type, and Triton has no FP4
+          # element type at all. It is listed so --dtype fp4 is a recognized
+          # request that reports a documented status instead of a KeyError.
+          "fp4": getattr(torch, "float4_e2m1fn_x2", None)}
 
 # Narrow float types that a backend may only be able to compute by extending to
 # FP32. For these, an explicitly widened FMA keeping the narrow state is a valid
@@ -888,6 +894,11 @@ def launch_vector(kernel, grid, inputs, output, coefficients, elements, iteratio
 
 
 def unsupported_dtype_reason(dtype, metadata):
+    if dtype == "fp4":
+        # Checked before the storage test below: the blocker is the absence of
+        # an FP4 arithmetic element type, which holds whether or not this
+        # PyTorch build ships the packed container dtype.
+        return f"{_FP4_VECTOR_REJECTION} (checked: {_fp4_vector_rejection_detail()['detail']})"
     if DTYPES[dtype] is None:
         return f"This PyTorch build does not expose {dtype.upper()} storage"
     if dtype == "fp64" and metadata.get("supports_fp64") is False:
@@ -901,6 +912,36 @@ _FP8_VECTOR_REJECTION = (
     "This benchmark has no implemented and verified native FP8 vector arithmetic "
     "path; FP8 storage, conversions, or tensor instructions do not measure native "
     "FP8 vector throughput. This does not determine chip support")
+
+_FP4_VECTOR_REJECTION = (
+    "FP4 (E2M1) is not an arithmetic element type in this stack: Triton exposes no "
+    "FP4 scalar dtype, so no FP4 multiply-add can be written, and PyTorch's "
+    "float4_e2m1fn_x2 is a two-element container rather than a scalar type. FP4 "
+    "storage, packing, conversions, or microscaled matrix instructions do not "
+    "measure native FP4 vector throughput. This does not determine chip support; "
+    "where a chip executes FP4 natively on its matrix unit, that rate is the "
+    "tensor_fp4 metric")
+
+
+def _fp4_vector_rejection_detail():
+    """Name the specific layer that blocks an FP4 vector arithmetic path.
+
+    Reported alongside the refusal so the status is traceable to a checked fact
+    rather than to a hardcoded opinion. Both checks are local to the installed
+    toolchain and need no device.
+    """
+    triton_fp4 = [name for name in dir(tl)
+                  if name.startswith("float4") or name.startswith("fp4")]
+    container = DTYPES["fp4"]
+    return {
+        "triton_fp4_scalar_dtypes": triton_fp4,
+        "triton_provides_fp4_element_type": bool(triton_fp4),
+        "torch_fp4_container_dtype": None if container is None else str(container),
+        "torch_container_elements_per_item": None if container is None else 2,
+        "detail": ("triton.language exposes no FP4 element type, so tl.fma/tl.mul have "
+                   "no FP4 overload to lower" if not triton_fp4 else
+                   "triton.language exposes an FP4 element type; re-examine this refusal"),
+    }
 
 
 def _fp8_native_elementwise_probe(device):
@@ -1334,6 +1375,10 @@ def main():
         parser.error("--iterations must be divisible by every --unroll factor")
     reason = unsupported_dtype_reason(args.dtype, metadata)
     if reason:
+        if args.dtype == "fp4":
+            # Record the checked toolchain facts next to the refusal so the
+            # status can be re-verified from the result file alone.
+            metadata["vector_fp4_capability_probe"] = _fp4_vector_rejection_detail()
         emit_unsupported(f"vector_{args.dtype}", metadata, args, reason)
         return
     # Resolve the device lazily: the status paths below must stay usable

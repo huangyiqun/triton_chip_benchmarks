@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "device": {
+    "device_index": 1,
+    "device_type": "npu",
+    "device_name": "Ascend950DT_9582",
+    "vendor_name": "ascend",
+    "backend": "npu",
+    "architecture": "Ascend950DT_9582",
+    "sm_count": 64,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 98515812352,
+    "memory_capacity_gib": 91.75,
+    "l2_cache_bytes": 134217728,
+    "l2_cache_source": "device properties",
+    "supports_fp64": false,
+    "supports_bf16": true,
+    "torch_version": "2.10.0+cpu",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.5.0.dev0+gda6b2b845+gda6b2b845",
+    "device_api": "torch_npu.npu"
+  },
+  "results": []
+}

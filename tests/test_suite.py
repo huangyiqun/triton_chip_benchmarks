@@ -20,11 +20,11 @@ def metric(key):
 
 class SuiteReportTests(unittest.TestCase):
     def test_complete_metric_table_has_all_requested_precisions(self):
-        self.assertEqual(len(METRICS), 15)
+        self.assertEqual(len(METRICS), 17)
         self.assertEqual({item.precision for item in METRICS if item.group == "Tensor"},
-                         {"bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8"})
+                         {"bf16", "fp16", "fp32", "tf32", "int8", "fp64", "fp8", "fp4"})
         self.assertEqual({item.precision for item in METRICS if item.group == "Vector"},
-                         {"bf16", "fp16", "fp32", "int8", "fp64", "fp8"})
+                         {"bf16", "fp16", "fp32", "int8", "fp64", "fp8", "fp4"})
 
     def test_capacity_is_reported_in_gib_and_missing_capacity_is_explicit(self):
         item = metric("memory_capacity")
@@ -232,7 +232,7 @@ class SuiteRunnerTests(unittest.TestCase):
 
             def child(item, args, directory):
                 snapshot = json.loads(args.output.read_text())
-                self.assertEqual(len(snapshot["results"]), 15)
+                self.assertEqual(len(snapshot["results"]), len(METRICS))
                 self.assertEqual(sum(row["status"] != "pending" for row in snapshot["results"]),
                                  len(observed))
                 observed.append(item.key)
@@ -241,7 +241,7 @@ class SuiteRunnerTests(unittest.TestCase):
 
             with mock.patch.object(suite, "run_metric", side_effect=child), redirect_stdout(io.StringIO()):
                 report = suite.run_suite(args)
-            self.assertEqual(len(observed), 15)
+            self.assertEqual(len(observed), len(METRICS))
             self.assertEqual(report["status"], "complete_with_errors")
             self.assertNotIn("pending", {row["status"] for row in report["results"]})
             self.assertEqual(json.loads(args.output.read_text()), report)

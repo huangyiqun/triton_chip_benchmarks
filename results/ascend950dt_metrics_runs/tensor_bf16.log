@@ -1,0 +1,24 @@
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:13: FutureWarning: triton.language.extra.cann.extension.atan2 is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.atan2 instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.atan2")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:35: FutureWarning: triton.language.extra.cann.extension.isfinited is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.isfinited instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.isfinited")
+/usr/local/python3.12.16/lib/python3.12/site-packages/triton/language/extra/cann/extension/math_ops.py:49: FutureWarning: triton.language.extra.cann.extension.finitef is deprecated and will be removed in the next release; use triton.language.extra.cann.libdevice.finitef instead.
+  @_deprecated(replacement="triton.language.extra.cann.libdevice.finitef")
+Device npu:0: Ascend950DT_9582 | vendor=ascend | Triton=npu/Ascend950DT_9582 | compute units=64 | memory=91.8 GiB
+FlagGems shim-torch_npu-2.10.0.post7, PyTorch 2.10.0+cpu, Triton 3.6.0; timing=events, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Instruction audit unavailable for ascend; native tensor execution is unverified.
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: events via FlagGems ascend device events
+   32/32/32          1      4     0.2868    0.2866        29.95      29.97     0
+   32/32/32          2      4     0.5729    0.5721        29.99      30.03     0
+   32/32/32          4      4     1.1446    1.1437        30.02      30.04     0
+   32/32/32          8      4     2.2870    2.2858        30.05      30.06     0
+   64/64/32          1      4     0.2534    0.2534       135.57     135.59     0
+   64/64/32          2      4     0.5024    0.5023       136.78     136.80     0
+   64/64/32          4      4     1.0009    1.0007       137.31     137.35     0
+   64/64/32          8      4     1.9963    1.9957       137.70     137.74     0
+Measured tl.dot throughput (native execution unverified): 137.74 TFLOP/s (same configuration median 137.70 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/triton_chip_benchmarks/results/ascend950dt_metrics_runs/tensor_bf16.json

@@ -1,0 +1,121 @@
+{
+    "benchmark": "vector_peak",
+    "dtype": "fp16",
+    "unit": "TFLOP/s",
+    "chains": 12,
+    "lanes_per_register": 128,
+    "iterations": 4096,
+    "arithmetic_kind": "native_fp16_madd",
+    "arithmetic_note": "native in-place asc_madd on vector_half; FP16 state",
+    "native_arithmetic": true,
+    "operation_count_formula": "2 * chains * lanes * iterations * blocks",
+    "results": [
+      {
+        "blocks": 64,
+        "blocks_per_core": 1,
+        "iterations": 4096,
+        "operation_count": 805306368,
+        "peak_throughput": 25.25250613,
+        "median_throughput": 25.24649837,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.03189015633,
+          "median_ms": 0.03189774503,
+          "max_ms": 0.03191785845,
+          "launches_per_batch": 293,
+          "sample_count": 22,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 128,
+        "blocks_per_core": 2,
+        "iterations": 4096,
+        "operation_count": 1610612736,
+        "peak_throughput": 25.66008922,
+        "median_throughput": 25.65614359,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.06276723055,
+          "median_ms": 0.06277688344,
+          "max_ms": 0.06279898301,
+          "launches_per_batch": 156,
+          "sample_count": 21,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 256,
+        "blocks_per_core": 4,
+        "iterations": 4096,
+        "operation_count": 3221225472,
+        "peak_throughput": 25.9641556,
+        "median_throughput": 25.95968068,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.1240643263,
+          "median_ms": 0.1240857124,
+          "max_ms": 0.1241036773,
+          "launches_per_batch": 80,
+          "sample_count": 21,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      },
+      {
+        "blocks": 512,
+        "blocks_per_core": 8,
+        "iterations": 4096,
+        "operation_count": 6442450944,
+        "peak_throughput": 26.17106434,
+        "median_throughput": 26.16532444,
+        "unit": "TFLOP/s",
+        "status": "ok",
+        "correctness": "all chain outputs exact against the host recurrence (zero tolerance)",
+        "max_abs_error": 0,
+        "timing": {
+          "min_ms": 0.2461669445,
+          "median_ms": 0.2462209463,
+          "max_ms": 0.2463355541,
+          "launches_per_batch": 40,
+          "sample_count": 21,
+          "provider": "aclrtRecordEvent / aclrtEventElapsedTime",
+          "peak_statistic": "minimum sampled batch-average device time",
+          "sustained_statistic": "median sampled batch-average device time"
+        }
+      }
+    ],
+    "status": "ok",
+    "value": 26.17106434,
+    "median_value": 26.16532444,
+    "best_blocks": 512,
+    "device": {
+      "device_id": 0,
+      "soc_name": "Ascend950DT_9582",
+      "npu_arch": 3510,
+      "aicore_count": 32,
+      "cube_core_count": 32,
+      "vector_core_count": 64,
+      "ub_bytes_per_vector_core": 221184,
+      "total_memory_bytes": 98515812352,
+      "memory_capacity_gib": 91.75,
+      "l2_cache_bytes": 134217728,
+      "aicore_freq_mhz": 1650,
+      "free_memory_bytes": 97761902592,
+      "query_source": "aclrtGetDeviceInfo / aclrtGetSocName"
+    }
+}
