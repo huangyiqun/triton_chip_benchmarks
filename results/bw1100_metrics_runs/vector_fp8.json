@@ -1,0 +1,61 @@
+{
+  "benchmark": "vector_fp8",
+  "status": "not_implemented",
+  "reason": "This benchmark has no implemented and verified native FP8 vector arithmetic path; FP8 storage, conversions, or tensor instructions do not measure native FP8 vector throughput. This does not determine chip support (probe: the backend cannot compile FP8 elementwise multiply-add: PassManager::run failed)",
+  "timestamp_utc": "2026-11-06T11:56:56.283331+00:00",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "BW1101",
+    "vendor_name": "hygon",
+    "backend": "hip",
+    "architecture": "gfx938",
+    "sm_count": 64,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 154602045440,
+    "memory_capacity_gib": 143.984375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.5.0.dev0+g0232b77c0",
+    "device_api": "torch.cuda"
+  },
+  "arguments": {
+    "device": 0,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/vector_fp8.json",
+    "dtype": "fp8",
+    "iterations": 4096,
+    "blocks_per_sm": [
+      8,
+      16
+    ],
+    "block_sizes": [
+      256,
+      512,
+      1024,
+      2048
+    ],
+    "num_warps": [
+      4,
+      8
+    ],
+    "unroll": [
+      1,
+      4,
+      8,
+      16
+    ],
+    "quick": false
+  },
+  "results": []
+}

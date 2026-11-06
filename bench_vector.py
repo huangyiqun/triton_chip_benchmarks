@@ -5,6 +5,16 @@ import os
 
 # Enable the KunlunXin KL3 event backend before accelerator packages are loaded.
 os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+# FlagTree's hcu (Hygon DCU) backend lowers masked loads to buffer resources via
+# llvm.amdgcn.make.buffer.rsrc, which the clang-18 shipped in DTK 26.04 rejects
+# ("Intrinsic has incorrect argument type"). Every masked tl.load in this suite
+# hits it, so the default would fail the whole table at compile time rather than
+# measure anything. Buffer ops are an addressing optimization, not an
+# arithmetic path: disabling them changes how operands are fetched, not which
+# matrix or FMA instruction executes, and the instruction audits still verify
+# the arithmetic that ran. An explicit user setting is preserved, so the knob
+# can be turned back on once a fixed toolchain is installed.
+os.environ.setdefault("AMDGCN_USE_BUFFER_OPS", "0")
 
 import argparse
 import math
@@ -59,6 +69,11 @@ _TL_ADD = getattr(tl, "add", None) or tl.core.add
 # AIU matrix ops as ppu.mma.* inline asm in LLVM IR, the way NVIDIA spells
 # them mma./wgmma./tcgen05. in PTX.
 _PPU_VECTOR_MMA_RE = re.compile(r"ppu\.mma\.")
+# FlagGems vendors whose Triton backend emits final AMDGCN assembly. Hygon's
+# DCU is a separate vendor with its own ISA dialect, but it compiles through
+# the same AMDGCN path and publishes the assembly under the same key, so its
+# vector arithmetic can be audited against real ISA rather than left unverified.
+VECTOR_AMDGCN_VENDORS = ("amd", "hygon")
 
 
 class UnsupportedVectorDtype(RuntimeError):
@@ -640,6 +655,81 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
         })
         if dtype == "fp32":
             result["llir_fp32_fma_instruction_sites"] = instruction_count
+    elif vendor_name in VECTOR_AMDGCN_VENDORS or backend == "hip":
+        # AMD and Hygon both compile through the AMDGCN path and expose the
+        # final assembly under "amdgcn", so this is real ISA evidence rather
+        # than IR. The checks mirror the nvidia branch: reject matrix
+        # instructions in a vector benchmark, require a per-dtype native FMA,
+        # and reject a narrow dtype the compiler widened to FP32 instead of
+        # executing natively. Hygon spells its matrix instruction v_mmac_*
+        # where AMD spells it v_mfma_*/v_wmma_*; all three are rejected here.
+        gcn = (compiled.asm or {}).get("amdgcn", "")
+        if not gcn:
+            return result
+        tensor_ops = bool(re.search(r"\bv_(?:mfma|wmma|mmac)_", gcn))
+        if tensor_ops:
+            raise RuntimeError("Generated AMDGCN contains matrix instructions in a vector benchmark")
+        promoted_from = None
+        if dtype == "int8":
+            # Neither target exposes DP4A through this path, so the INT8 kernel
+            # is the typed modulo-256 multiply plus add. Count the integer
+            # arithmetic it lowers to. Width matters: the DCU keeps this path in
+            # 16-bit integer ops (v_mul_lo_u16, v_mad_legacy_u16), which still
+            # carry the INT8 values the kernel declared, so the 16- and 32-bit
+            # spellings both count as typed integer arithmetic. As on the other
+            # non-DP4A vendors this is not final proof of a native INT8
+            # execution unit, so the suite keeps the rate unverified.
+            instruction_count = len(re.findall(
+                r"\bv_(?:mul_(?:lo_|hi_)?|mad_(?:legacy_)?)[iu](?:8|16|32)(?:_e(?:32|64))?\b",
+                gcn))
+            instruction = "typed integer multiply/add (no DP4A on this target)"
+        else:
+            width = {"fp16": "f16", "bf16": "bf16", "fp32": "f32", "fp64": "f64"}[dtype]
+            instruction_count = len(re.findall(
+                rf"\bv_(?:pk_)?(?:fma|fmac|mac|mad)_{width}(?:_e(?:32|64))?\b", gcn))
+            instruction = f"{dtype.upper()} FMA"
+            if dtype in ("fp16", "bf16") and instruction_count == 0:
+                # No narrow FMA at all: the compiler widened this dtype to FP32.
+                # The DCU does this for BF16, which has no v_fma_bf16. Follow the
+                # MetaX precedent rather than the NVIDIA one and keep the rate:
+                # the arithmetic really ran and the recurrence state really kept
+                # the narrow dtype, so the number describes what the chip does
+                # with BF16 data. It is not a native BF16 execution rate, so it
+                # is recorded as promoted and never marked verified.
+                widened = sorted(set(re.findall(
+                    r"\bv_(?:pk_)?(?:fma|fmac|mac|mad)_f(?:32|64)(?:_e(?:32|64))?\b", gcn)))
+                if widened:
+                    promoted_from = widened
+                    instruction_count = sum(gcn.count(name) for name in widened)
+        if instruction_count == 0:
+            raise UnsupportedVectorDtype(
+                f"Generated AMDGCN does not contain native {instruction}")
+        result.update({
+            "amdgcn_arithmetic_instruction_sites": instruction_count,
+            "amdgcn_contains_matrix_instructions": tensor_ops,
+            # Only a floating FMA naming the requested element width proves the
+            # requested dtype executed natively. A widened narrow dtype and the
+            # INT8 integer path both fail that test.
+            "native_arithmetic_verified": dtype != "int8" and promoted_from is None,
+        })
+        if promoted_from is not None:
+            result.update({
+                "amdgcn_arithmetic_promoted": True,
+                "amdgcn_promoted_instructions": promoted_from,
+                "assembly_check": (
+                    f"unverified: AMDGCN contains no native {dtype.upper()} FMA; the kernel "
+                    f"was promoted to {', '.join(promoted_from)}, so this is not a native "
+                    f"{dtype.upper()} vector rate"),
+            })
+        elif dtype == "int8":
+            result["assembly_check"] = (
+                f"unverified: AMDGCN contains {instruction_count} typed integer "
+                "multiply/add site(s), but this target has no DP4A and the integer "
+                "ops are wider than INT8, so native INT8 arithmetic is not established")
+        else:
+            result["assembly_check"] = f"passed ({instruction}; no matrix instructions)"
+        if dtype == "fp32":
+            result["amdgcn_fp32_fma_instruction_sites"] = instruction_count
     # Some non-NVIDIA runtimes also expose a backend named "cuda".
     elif vendor_name == "nvidia":
         ptx = compiled.asm["ptx"]

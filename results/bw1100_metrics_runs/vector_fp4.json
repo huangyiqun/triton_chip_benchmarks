@@ -1,0 +1,68 @@
+{
+  "benchmark": "vector_fp4",
+  "status": "unsupported",
+  "reason": "FP4 (E2M1) is not an arithmetic element type in this stack: Triton exposes no FP4 scalar dtype, so no FP4 multiply-add can be written, and PyTorch's float4_e2m1fn_x2 is a two-element container rather than a scalar type. FP4 storage, packing, conversions, or microscaled matrix instructions do not measure native FP4 vector throughput. This does not determine chip support; where a chip executes FP4 natively on its matrix unit, that rate is the tensor_fp4 metric (checked: triton.language exposes no FP4 element type, so tl.fma/tl.mul have no FP4 overload to lower)",
+  "timestamp_utc": "2026-11-06T11:57:14.363678+00:00",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "BW1101",
+    "vendor_name": "hygon",
+    "backend": "hip",
+    "architecture": "gfx938",
+    "sm_count": 64,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 154602045440,
+    "memory_capacity_gib": 143.984375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.5.0.dev0+g0232b77c0",
+    "device_api": "torch.cuda",
+    "vector_fp4_capability_probe": {
+      "triton_fp4_scalar_dtypes": [],
+      "triton_provides_fp4_element_type": false,
+      "torch_fp4_container_dtype": "torch.float4_e2m1fn_x2",
+      "torch_container_elements_per_item": 2,
+      "detail": "triton.language exposes no FP4 element type, so tl.fma/tl.mul have no FP4 overload to lower"
+    }
+  },
+  "arguments": {
+    "device": 0,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/vector_fp4.json",
+    "dtype": "fp4",
+    "iterations": 4096,
+    "blocks_per_sm": [
+      8,
+      16
+    ],
+    "block_sizes": [
+      256,
+      512,
+      1024,
+      2048
+    ],
+    "num_warps": [
+      4,
+      8
+    ],
+    "unroll": [
+      1,
+      4,
+      8,
+      16
+    ],
+    "quick": false
+  },
+  "results": []
+}

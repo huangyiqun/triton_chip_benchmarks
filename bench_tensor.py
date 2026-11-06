@@ -16,6 +16,17 @@ import os
 # Keep an explicit user setting (for example, 0 while diagnosing event support).
 os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
 
+# FlagTree's hcu (Hygon DCU) backend lowers masked loads to buffer resources via
+# llvm.amdgcn.make.buffer.rsrc, which the clang-18 shipped in DTK 26.04 rejects
+# ("Intrinsic has incorrect argument type"). Every masked tl.load in this suite
+# hits it, so the default would fail the whole table at compile time rather than
+# measure anything. Buffer ops are an addressing optimization, not an
+# arithmetic path: disabling them changes how operands are fetched, not which
+# matrix or FMA instruction executes, and the instruction audits still verify
+# the arithmetic that ran. An explicit user setting is preserved, so the knob
+# can be turned back on once a fixed toolchain is installed.
+os.environ.setdefault("AMDGCN_USE_BUFFER_OPS", "0")
+
 import argparse
 import math
 import re
@@ -112,7 +123,11 @@ def _unsupported_reason(exc: Exception) -> str | None:
         r"fp(?:8\w*|16|32|64)|bf16|tf32|int8|float(?:8\w*|16|32|64)|bfloat16)\b"
     )
     rejection = (r"unsupported|not supported|does not support|not implemented|"
-                 r"only .{0,100} supported|invalid (?:input |output )?dtype")
+                 r"only .{0,100} supported|invalid (?:input |output )?dtype|"
+                 # Triton's own capability assertions phrase a rejected dtype or
+                 # math mode as an allow-list rather than as "unsupported", e.g.
+                 # "input_precision must be one of ('ieee',). Got tf32".
+                 r"must be one of")
     explicit_rejection = any(
         re.search(format_or_operation, line, re.IGNORECASE)
         and re.search(rejection, line, re.IGNORECASE)
@@ -487,7 +502,12 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
         # tiles avoid excessive register pressure. AMD may still select MFMA.
         choices = [(32, 32, k, 4), (32, 64, k, 4),
                    (64, 32, k, 4), (64, 64, k, 4)]
-    elif vendor in ("nvidia", "amd"):
+    elif vendor in ("nvidia", "amd", "hygon"):
+        # Kept as a literal rather than reusing _AMDGCN_VENDORS: the tile-shape
+        # tests execute this function standalone via AST extraction, so it must
+        # not reference module globals. Hygon shares the AMD tile set because a
+        # BW1101 sweep measured its best shape inside that set within 0.1% of
+        # the best shape overall for FP16 (333.5 against 333.9 TFLOP/s).
         choices = [(64, 64, k, 4), (64, 128, k, 4), (128, 64, k, 4)]
     elif vendor == "thead":
         # T-Head PPU: the AIU executes m16n16k16/m16n16k8/m16n16k32 MMA
@@ -874,12 +894,43 @@ def _instruction_name(line: str) -> str:
     return ""
 
 
+# FlagGems vendors whose Triton backend emits AMDGCN assembly. Hygon's DCU is a
+# separate vendor with its own ISA dialect, but it compiles through the same
+# AMDGCN path and exposes the assembly under the same "amdgcn" key, so it is
+# audited by the AMD branch rather than left unverified.
+_AMDGCN_VENDORS = ("amd", "hygon")
+
+# Matrix-core mnemonics on the AMDGCN path. AMD spells its matrix instructions
+# v_mfma_*/v_wmma_*; Hygon's DCU spells the equivalent instruction v_mmac_*
+# (matrix multiply-accumulate, e.g. v_mmac_f32_16x16x16_f16). All three are
+# matrix instructions, as distinct from the scalar/vector v_fma_* forms.
+_AMDGCN_MATRIX_MNEMONICS = ("v_mfma_", "v_wmma_", "v_mmac_")
+
+
 def _amd_matrix_format(line: str, accumulator: str, operand: str) -> bool:
-    """Accept LLVM's legacy K+type spelling and the normalized K_type spelling."""
-    return re.fullmatch(
-        rf"v_(?:mfma|wmma)_{accumulator}_\d+x\d+x\d+_?{operand}(?:_e(?:32|64))?",
-        _instruction_name(line),
-    ) is not None
+    """Accept LLVM's legacy K+type spelling and the normalized K_type spelling.
+
+    Three spellings occur on this path:
+      v_mfma_f32_16x16x16f16     AMD, legacy K+type
+      v_mfma_i32_16x16x32_i8     AMD, normalized K_type
+      v_mmac_f32_16x16x32_fp8_fp8  Hygon, one operand type per input
+      v_mmac_16x16x8_f32         Hygon, accumulator segment omitted
+
+    Hygon omits the accumulator segment when it equals the operand type (its
+    FP32 matrix instruction), so an absent segment is accepted only when the
+    requested accumulator and operand match. That keeps the omission from
+    matching a request for a different accumulator width.
+    """
+    name = _instruction_name(line)
+    shape = r"\d+x\d+x\d+"
+    suffix = rf"(?:_{operand})*(?:_e(?:32|64))?"
+    explicit = rf"v_(?:mfma|wmma|mmac)_{accumulator}_{shape}_?{operand}{suffix}"
+    if re.fullmatch(explicit, name) is not None:
+        return True
+    if accumulator != operand:
+        return False
+    implicit = rf"v_(?:mfma|wmma|mmac)_{shape}_?{operand}{suffix}"
+    return re.fullmatch(implicit, name) is not None
 
 
 # T-Head PPU emits no PTX: its AIU matrix ops reach LLVM IR as inline asm
@@ -942,9 +993,10 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
     execution_kind = "unverified"
     instruction_precision_verified = False
     native_tensor_verified = False
-    if vendor in ("nvidia", "amd", "thead"):
+    if vendor in ("nvidia", "thead", *_AMDGCN_VENDORS):
         assembly = assemblies.get(
-            "ptx" if vendor == "nvidia" else "amdgcn" if vendor == "amd" else "llir", "")
+            "ptx" if vendor == "nvidia" else
+            "amdgcn" if vendor in _AMDGCN_VENDORS else "llir", "")
         if vendor == "nvidia":
             tensor_lines = [line for line in assembly.splitlines()
                             if "mma.sync." in line or "wgmma.mma_async." in line
@@ -958,10 +1010,11 @@ def _compiled_info(compiled, vendor: str, dtype: str = "fp16",
                                  if _ppu_fma_width(line, "32")]
         else:
             tensor_lines = [line for line in assembly.splitlines()
-                            if "v_mfma_" in line or "v_wmma_" in line]
+                            if any(name in line for name in _AMDGCN_MATRIX_MNEMONICS)]
             scalar_fp32_lines = [line for line in assembly.splitlines()
                                  if any(name in line for name in
-                                        ("v_fma_f32", "v_fmac_f32", "v_mac_f32"))]
+                                        ("v_fma_f32", "v_fmac_f32", "v_mac_f32",
+                                         "v_pk_fma_f32"))]
 
         if dtype == "fp64":
             scalar_fp64_lines = [line for line in assembly.splitlines()
@@ -1127,7 +1180,7 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
         print(f"MX FP4 E2M1 via tl.dot_scaled: {FP4_PACKING_FACTOR} elements per uint8 container, "
               f"one E8M0 scale per {MX_GROUP_SIZE} elements along K, all scales 2**0; "
               "exact-check inputs. tile K counts E2M1 elements, not container bytes.")
-    if vendor not in ("nvidia", "amd", "thead"):
+    if vendor not in ("nvidia", "thead", *_AMDGCN_VENDORS):
         print(f"Instruction audit unavailable for {vendor}; native tensor execution is unverified.")
     print(f"Iterations={args.iterations}; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks")
     print(f" tile M/N/K  blocks/SM  warps  median ms    min ms  median {unit}  peak {unit}  regs")
@@ -1278,19 +1331,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _backend_options():
+    """Parsed compile options for the active Triton backend, or None."""
+    try:
+        backend = triton.compiler.compiler.make_backend(
+            triton.runtime.driver.active.get_current_target())
+        return backend.parse_options({})
+    except Exception:
+        return None
+
+
 def _backend_fp8_dtypes() -> tuple[str, ...] | None:
     """The fp8 types the active Triton backend declares it can lower.
 
     Returns None when the backend does not publish the list, which is not
     evidence either way.
     """
-    try:
-        backend = triton.compiler.compiler.make_backend(
-            triton.runtime.driver.active.get_current_target())
-        options = backend.parse_options({})
-    except Exception:
+    options = _backend_options()
+    if options is None:
         return None
     declared = getattr(options, "supported_fp8_dtypes", None)
+    return None if declared is None else tuple(declared)
+
+
+def _backend_dot_input_precisions() -> tuple[str, ...] | None:
+    """The tl.dot input precisions the active Triton backend declares.
+
+    Returns None when the backend does not publish the list, which is not
+    evidence either way.
+    """
+    options = _backend_options()
+    if options is None:
+        return None
+    declared = getattr(options, "allowed_dot_input_precisions", None)
     return None if declared is None else tuple(declared)
 
 
@@ -1348,6 +1421,19 @@ def _capability_reason(args, metadata: dict) -> str | None:
         return (f"The Triton backend for {metadata['vendor_name']} declares no supported FP8 "
                 "dtypes, so tl.dot cannot accept FP8 operands. This is a backend limitation, "
                 "not a determination of chip support")
+    if args.dtype == "fp32" and args.input_precision is not None:
+        # tl.dot asserts on an input_precision the backend does not list, and
+        # that assertion fires inside the untimed precision probe, before any
+        # sweep. Ask the backend what it allows first, so a math mode it never
+        # implemented is reported as unsupported rather than as a crash. The
+        # declaration is only trusted to reject: a listed mode still has to
+        # pass the probe, which is what proves the mode was actually honored.
+        declared = _backend_dot_input_precisions()
+        if declared is not None and args.input_precision not in declared:
+            allowed = ", ".join(declared) if declared else "none"
+            return (f"The Triton backend for {metadata['vendor_name']} does not accept "
+                    f"tl.dot input_precision={args.input_precision!r}; it declares: {allowed}. "
+                    "This is a backend limitation, not a determination of chip support")
     return None
 
 

@@ -1,0 +1,22 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp8 operands, two independent FP32 accumulator chains
+FP8 E4M3FN: backend accumulation policy (internal precision is hardware-dependent); exact-check inputs
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   64/64/64          1      4     0.1069    0.1069       642.94     643.09    75
+   64/64/64          2      4     0.2051    0.2049       670.25     670.65    75
+   64/64/64          4      4     0.4015    0.4015       684.61     684.68    75
+   64/64/64          8      4     0.7939    0.7938       692.48     692.56    75
+  64/128/64          1      4     0.2093    0.2093       656.57     656.65   107
+  64/128/64          2      4     0.4057    0.4054       677.60     677.96   107
+  64/128/64          4      4     0.7974    0.7973       689.45     689.53   107
+  64/128/64          8      4     1.5793    1.5791       696.21     696.28   107
+  128/64/64          1      4     0.2078    0.2077       661.31     661.65   108
+  128/64/64          2      4     0.4041    0.4039       680.27     680.64   108
+  128/64/64          4      4     0.7956    0.7955       691.00     691.08   108
+  128/64/64          8      4     1.5781    1.5780       696.75     696.79   108
+Measured tensor peak: 696.79 TFLOP/s (same configuration median 696.75 TFLOP/s; best observed timing sample, dense fp8)
+JSON: /workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/tensor_fp8.json

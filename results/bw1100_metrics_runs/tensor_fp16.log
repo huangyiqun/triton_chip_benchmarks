@@ -1,0 +1,21 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp16 operands, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   64/64/32          1      4     0.1060    0.1059       324.28     324.31    61
+   64/64/32          2      4     0.2037    0.2037       337.28     337.31    61
+   64/64/32          4      4     0.4002    0.4001       343.45     343.48    61
+   64/64/32          8      4     0.7920    0.7919       347.06     347.13    61
+  64/128/32          1      4     0.2098    0.2097       327.60     327.65   100
+  64/128/32          2      4     0.4055    0.4054       338.96     338.98   100
+  64/128/32          4      4     0.7970    0.7969       344.90     344.92   100
+  64/128/32          8      4     1.5779    1.5777       348.40     348.45   100
+  128/64/32          1      4     0.2110    0.2110       325.63     325.67   102
+  128/64/32          2      4     0.4067    0.4066       337.92     338.04   102
+  128/64/32          4      4     0.7982    0.7978       344.38     344.55   102
+  128/64/32          8      4     1.5794    1.5793       348.08     348.09   102
+Measured tensor peak: 348.45 TFLOP/s (same configuration median 348.40 TFLOP/s; best observed timing sample, dense fp16)
+JSON: /workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/tensor_fp16.json

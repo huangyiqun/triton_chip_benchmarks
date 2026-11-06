@@ -1,0 +1,2 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms

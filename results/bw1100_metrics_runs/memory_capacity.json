@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "BW1101",
+    "vendor_name": "hygon",
+    "backend": "hip",
+    "architecture": "gfx938",
+    "sm_count": 64,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 154602045440,
+    "memory_capacity_gib": 143.984375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.10.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.5.0.dev0+g0232b77c0",
+    "device_api": "torch.cuda"
+  },
+  "results": []
+}

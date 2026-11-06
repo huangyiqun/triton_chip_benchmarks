@@ -1,0 +1,4 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+UNSUPPORTED: FP4 (E2M1) is not an arithmetic element type in this stack: Triton exposes no FP4 scalar dtype, so no FP4 multiply-add can be written, and PyTorch's float4_e2m1fn_x2 is a two-element container rather than a scalar type. FP4 storage, packing, conversions, or microscaled matrix instructions do not measure native FP4 vector throughput. This does not determine chip support; where a chip executes FP4 natively on its matrix unit, that rate is the tensor_fp4 metric (checked: triton.language exposes no FP4 element type, so tl.fma/tl.mul have no FP4 overload to lower)
+JSON: /workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/vector_fp4.json

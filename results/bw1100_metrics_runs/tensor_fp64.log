@@ -1,0 +1,13 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp64 operands, two independent FP64 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   32/32/16          1      4     0.4844    0.4844         8.87       8.87   213
+   32/32/16          2      4     0.8562    0.8561        10.03      10.03   213
+   32/32/16          4      4     1.6375    1.6374        10.49      10.49   213
+   32/32/16          8      4     3.1929    3.1927        10.76      10.76   213
+Measured FP64 matrix throughput: 10.76 TFLOP/s (same configuration median 10.76 TFLOP/s; best observed timing sample, dense fp64)
+JSON: /workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/tensor_fp64.json

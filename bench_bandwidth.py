@@ -5,6 +5,16 @@ import os
 
 # Enable the KunlunXin KL3 event backend before accelerator packages are loaded.
 os.environ.setdefault("XPU_EVENT_KL3_ENABLE", "1")
+# FlagTree's hcu (Hygon DCU) backend lowers masked loads to buffer resources via
+# llvm.amdgcn.make.buffer.rsrc, which the clang-18 shipped in DTK 26.04 rejects
+# ("Intrinsic has incorrect argument type"). Every masked tl.load in this suite
+# hits it, so the default would fail the whole table at compile time rather than
+# measure anything. Buffer ops are an addressing optimization, not an
+# arithmetic path: disabling them changes how operands are fetched, not which
+# matrix or FMA instruction executes, and the instruction audits still verify
+# the arithmetic that ran. An explicit user setting is preserved, so the knob
+# can be turned back on once a fixed toolchain is installed.
+os.environ.setdefault("AMDGCN_USE_BUFFER_OPS", "0")
 # Without this, the FlagTree XPU compiler leaves lanes masked off by a
 # predicated tl.load holding uninitialized memory instead of `other`, so any
 # block larger than 8192 elements reduces a masked tail to garbage. Only the

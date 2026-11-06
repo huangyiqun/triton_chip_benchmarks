@@ -1,0 +1,21 @@
+Device cuda:0: BW1101 | vendor=hygon | Triton=hip/gfx938 | compute units=64 | memory=144.0 GiB
+FlagGems 5.5.0.dev0+g0232b77c0, PyTorch 2.10.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident int8 operands, two independent INT32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
+Timing: graph via FlagGems hygon device events
+   64/64/64          1      4     0.1069    0.1069       642.96     643.07    75
+   64/64/64          2      4     0.2049    0.2049       670.72     670.78    75
+   64/64/64          4      4     0.4018    0.4017       684.14     684.36    75
+   64/64/64          8      4     0.7943    0.7942       692.15     692.22    75
+  64/128/64          1      4     0.2093    0.2093       656.60     656.65   107
+  64/128/64          2      4     0.4055    0.4055       677.86     677.94   107
+  64/128/64          4      4     0.7974    0.7973       689.44     689.51   107
+  64/128/64          8      4     1.5793    1.5791       696.22     696.30   107
+  128/64/64          1      4     0.2077    0.2077       661.57     661.66   108
+  128/64/64          2      4     0.4039    0.4039       680.49     680.56   108
+  128/64/64          4      4     0.7957    0.7956       690.95     691.01   108
+  128/64/64          8      4     1.5781    1.5779       696.75     696.80   108
+Measured tensor peak: 696.80 TOPS (same configuration median 696.75 TOPS; best observed timing sample, dense int8)
+JSON: /workspace/triton_chip_benchmarks/results/bw1100_metrics_runs/tensor_int8.json
