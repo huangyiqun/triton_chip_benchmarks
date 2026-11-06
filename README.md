@@ -1,16 +1,28 @@
-# Triton Chip Peak Throughput Benchmarks
+README.md # Triton Chip Peak Throughput Benchmarks
 
-The suite attempts device-memory capacity and bandwidth plus Tensor and Vector throughput across the requested numeric formats. It sweeps configurations to find **the highest throughput observed on the current device under the current operating conditions**, while reporting the median for the same configuration to help assess stability. It always produces 15 report rows, but it cannot guarantee 15 numeric peaks: a backend may reject a format, a benchmark path may be missing, or a measurement may fail. Precision, execution units, clock frequency, and access patterns affect peak throughput, so each result retains its dtype, operation, validation, and instruction-audit metadata.
+The suite attempts device-memory capacity and bandwidth plus Tensor and Vector throughput across the requested numeric formats. It sweeps configurations to find **the highest throughput observed on the current device under the current operating conditions**, while reporting the median for the same configuration to help assess stability. It always produces 17 report rows, but it cannot guarantee 17 numeric peaks: a backend may reject a format, a benchmark path may be missing, or a measurement may fail. Precision, execution units, clock frequency, and access patterns affect peak throughput, so each result retains its dtype, operation, validation, and instruction-audit metadata.
 
-The complete report contains these 15 rows:
+The complete report contains these 17 rows:
 
 | Group | Metrics |
 | --- | --- |
 | Memory | Capacity (GiB), effective copy bandwidth (GB/s) |
-| Tensor/matrix | BF16, FP16, FP32, TF32, INT8, FP64, FP8 |
-| Vector | BF16, FP16, FP32, INT8, FP64, FP8 |
+| Tensor/matrix | BF16, FP16, FP32, TF32, INT8, FP64, FP8, FP4 |
+| Vector | BF16, FP16, FP32, INT8, FP64, FP8, FP4 |
 
 Floating-point throughput uses TFLOP/s. INT8 uses TOP/s. A missing value is never replaced by zero.
+
+FP4 is the one format with no unscaled `tl.dot` path. It is OCP MX FP4: E2M1 elements packed two per `uint8` container, with one E8M0 scale factor shared by every 32 elements along K, reached through `tl.dot_scaled`. The benchmark supplies unit scales (E8M0 code 127, `2**0`) so the measured arithmetic equals the raw FP4 products and the reference stays exact, while the hardware still runs the full MX dataflow including scale lookup and application. Tile `K` counts E2M1 elements, not container bytes. See [Matrix/Tensor](#1-matrixtensor-repeated-multiply-add-with-resident-operands) for the probes that keep an unscaled or mis-typed path from being reported as an FP4 peak.
+
+### A second implementation: [`ascendc/`](ascendc/README.md)
+
+`ascendc/` holds a native **Ascend C** implementation of the same 17-metric table for the Ascend 950 series, written against the SIMD C API and compiled with `bisheng`. It exists to answer a question the Triton suite cannot answer alone: when a measured rate falls short of the architectural ceiling, is that the chip or the compiler?
+
+The two are independent programs that share the metric contract rather than any code — the same 17 `(key, group, precision, unit)` rows and the same JSON report shape, so their tables diff row for row. The Triton suite stays portable across every FlagGems backend and needs no vendor toolchain; the Ascend C suite runs only on this chip but compiles the instruction itself, so it can name the execution path instead of reporting `unverified`.
+
+On Ascend950DT_9582 every **Tensor** row agrees to three significant figures, including FP4 at ~1723 against ~1725 TFLOP/s — two toolchains reaching the same silicon limit from different directions. The **Vector** rows diverge sharply, and that divergence is the useful result: Ascend C reaches 26.17 TFLOP/s BF16 where Triton reaches 8.88, because the in-place `asc_madd` form costs one fewer register move per update than the returning `asc_fma` spelling. Those gaps are compiler headroom, not hardware limits. See [`ascendc/RESULTS.md`](ascendc/RESULTS.md) for the full side-by-side table and [`ascendc/README.md`](ascendc/README.md) to build and run it.
+
+`ascendc/bin/` is a build product and is not tracked in git; `cd ascendc && ./build.sh` recreates all 16 binaries in about a minute. Both suites write into the shared `results/` directory, the Ascend C tables under `ascend950dt_ascendc_*`.
 
 ## Running the Benchmarks
 
@@ -30,9 +42,9 @@ Device type and vendor are handled separately: multiple vendors may use the `cud
 
 The kernels still require the target Triton backend to support the selected operation and dtype. FP8 Tensor uses E4M3FN and is not automatically replaced with another FP8 format. TF32 requires an explicit precision mode and is not silently replaced with IEEE FP32, BF16, or FP16. [FlagGems backend interface documentation](https://github.com/flagos-ai/FlagGems/blob/master/src/flag_gems/runtime/backend/README.md)
 
-### Complete 15-metric suite by chip
+### Complete 17-metric suite by chip
 
-Run from the repository root on an idle device. Each command below makes one `bench_suite.py` invocation that attempts all 15 metrics in the table above. Set `--device` to the target device index; for example, use `--device 1` for the second H20. These are full sweeps, not quick-mode smoke tests.
+Run from the repository root on an idle device. Each command below makes one `bench_suite.py` invocation that attempts all 17 metrics in the table above. Set `--device` to the target device index; for example, use `--device 1` for the second H20. These are full sweeps, not quick-mode smoke tests.
 
 NVIDIA Hopper H20:
 
@@ -69,9 +81,9 @@ python bench_suite.py --device 0 --timing auto \
   --output results/other_chip_metrics.json
 ```
 
-The scripts default `XPU_EVENT_KL3_ENABLE` to `1` before importing the device runtime, so KunlunXin commands need no shell environment prefix. An explicitly set value is respected. A complete 15-row report does not guarantee 15 numeric peaks: an individual metric may be unsupported, not implemented, unverified, or fail at runtime.
+The scripts default `XPU_EVENT_KL3_ENABLE` to `1` before importing the device runtime, so KunlunXin commands need no shell environment prefix. An explicitly set value is respected. A complete 17-row report does not guarantee 17 numeric peaks: an individual metric may be unsupported, not implemented, unverified, or fail at runtime.
 
-The suite runs every metric in a separate child process, continues after unsupported formats or failures, and checkpoints the combined JSON after every row. Per-metric JSON and logs are stored in a directory named after the output stem, such as `results/p800_metrics_runs/`. The console prints the same fixed 15-row table.
+The suite runs every metric in a separate child process, continues after unsupported formats or failures, and checkpoints the combined JSON after every row. Per-metric JSON and logs are stored in a directory named after the output stem, such as `results/p800_metrics_runs/`. The console prints the same fixed 17-row table.
 
 Result status has a strict meaning:
 
@@ -101,6 +113,7 @@ python bench_tensor.py --dtype tf32
 python bench_tensor.py --dtype int8
 python bench_tensor.py --dtype fp64
 python bench_tensor.py --dtype fp8
+python bench_tensor.py --dtype fp4
 
 # Vector: one format per invocation.
 python bench_vector.py --dtype bf16
@@ -109,6 +122,7 @@ python bench_vector.py --dtype fp32
 python bench_vector.py --dtype int8
 python bench_vector.py --dtype fp64
 python bench_vector.py --dtype fp8
+python bench_vector.py --dtype fp4
 
 python bench_bandwidth.py --dtype fp32 --output results/peak_bandwidth.json
 ```
@@ -119,21 +133,22 @@ Missing device properties are not filled with specifications from another chip. 
 
 ## 1. Matrix/Tensor: Repeated Multiply-Add with Resident Operands
 
-`bench_tensor.py` defaults to `--mode peak`: each program loads its operands from device memory once, repeatedly executes `tl.dot` in a loop with two independent accumulator chains, and writes all results at the end. Increasing the ratio of computation to memory traffic and varying the tile shape and programs per SM helps find the throughput limit of the compute units.
+`bench_tensor.py` defaults to `--mode peak`: each program loads its operands from device memory once, repeatedly executes `tl.dot` in a loop with two independent accumulator chains, and writes all results at the end. Increasing the ratio of computation to memory traffic and varying the tile shape and programs per SM helps find the throughput limit of the compute units. FP4 uses `tl.dot_scaled` in the same resident loop, with operands, scale factors, and both accumulators held across iterations.
 
-- BF16, FP16, FP32, TF32, INT8, FP64, and FP8 E4M3FN are tested separately. BF16/FP16/FP32/TF32/FP8 use FP32 accumulators, INT8 uses INT32, and FP64 uses FP64.
+- BF16, FP16, FP32, TF32, INT8, FP64, FP8 E4M3FN, and MX FP4 E2M1 are tested separately. BF16/FP16/FP32/TF32/FP8/FP4 use FP32 accumulators, INT8 uses INT32, and FP64 uses FP64.
 - `--dtype fp32` selects FP32 input storage with IEEE precision. `--dtype tf32` is an alias for FP32 storage with TF32 dot precision; the older `--dtype fp32 --input-precision tf32` spelling remains supported. TF32 is a math mode, not a storage dtype.
 - INT8 counts a multiply and add as two integer operations and reports TOP/s. All floating-point modes report TFLOP/s.
 - IEEE FP32 may use scalar/vector FMA instructions (SIMT) on NVIDIA. Such results are labeled **IEEE FP32 matrix throughput**, without claiming a tensor-core peak. Backends with native FP32 matrix instructions may use those instead.
 - The backend's native accumulation policy is used. FP32 output does not imply that internal accumulation always has full IEEE FP32 precision. On H20, forcing `max_num_imprecise_acc=0` falls back to FP16 instructions, so that path is not labeled as an FP8 peak measurement.
 - All outputs are validated numerically. FP32 runs also perform an untimed precision probe using `1 + 2^-12`, `1 + 2^-9`, and `2^20` in `A` with an identity matrix `B`. The first value distinguishes IEEE FP32 from TF32, the second rejects a BF16 fallback, and the third rejects an FP16 fallback. This validates the requested math mode even though the exact-check inputs used for peak timing are representable in all of them. The run stops if compilation rejects the requested mode or this probe disagrees with it.
 - The FP64 probe additionally carries a distinct marker value per row, so a backend that computes every product correctly but delivers it to the wrong output row is rejected by name. MetaX has exactly that defect; a probe with uniform rows cannot see it.
-- Peak-mode outputs are checked against the exact scaled dot reference with `rtol=0` and an analytic `atol` bounding the accumulated accumulator rounding (`4 × iterations × block_k / 256 × unit_roundoff`). INT8 keeps exact equality. At the 1024-iteration default the FP32-accumulator bound is 128× smaller than the `1/256` lattice step of the exact-fraction operands, so a single dropped iteration, a merged accumulator chain, or an unwritten output is still rejected. Bit-exact equality is not required because some backends round inside the MMA itself: MetaX returns BF16/FP16/TF32 results a few `2^-33` off the exact lattice point.
+- Peak-mode outputs are checked against the exact scaled dot reference with `rtol=0` and an analytic `atol` bounding the accumulated accumulator rounding (`4 × iterations × block_k / 256 × unit_roundoff`). INT8 keeps exact equality. At the 1024-iteration default the FP32-accumulator bound is 128× smaller than the `1/256` lattice step of the exact-fraction operands, so a single dropped iteration, a merged accumulator chain, or an unwritten output is still rejected. Bit-exact equality is not required because some backends round inside the MMA itself: MetaX returns BF16/FP16/TF32 results a few `2^-33` off the exact lattice point. FP4 operands are drawn from the four E2M1 codes for `±0.5` and `±1.0`, so every exact entry is a multiple of `0.25` bounded by `block_k`; its bound is the same expression with that operand magnitude in place of `1/256`.
 - Formats whose `tl.dot` the backend cannot lower are reported as `unsupported` from a small compile probe run before the sweep, rather than aborting the metric. Holding a dtype in memory does not imply a dot lowering exists for it: MetaX stores FP8 exactly but fails to lower any FP8 `tl.dot`.
+- FP4 gets a stricter pre-sweep probe than the other formats, because compiling proves less for it. Its operands ride in a `uint8` container, so a backend that ignored the E2M1 interpretation and multiplied raw bytes, or that dropped the per-group scales, would still compile and still return plausible numbers. The probe multiplies known E2M1 codes and demands **exact** equality with the FP64 reference, then raises `A`'s scale from `2**0` to `2**1` (E8M0 code 127 → 128) and demands the result be exactly doubled. A backend that fails either check is reported `unsupported` with the specific defect named, never measured. The reference is computed from the FP64 values of the codes that were actually packed into the operands, so a packing mistake cannot cancel itself out between kernel and reference.
 - NVIDIA/AMD instruction audits distinguish matrix instructions from SIMT FMA and verify the requested FP16, BF16, FP32, TF32, INT8, FP64, or FP8 operand format. A kernel lowered to another dtype is rejected for that metric. Other vendors retain the validated measurement with suite status `unverified` when instruction precision or execution cannot be audited. Missing register/spill attributes are recorded as `null`.
-- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. The T-Head PPU backend instead sweeps four narrow-N shapes (`128×32` through `512×32`, plus `128×64`) with an extended `1..64 blocks/SM` occupancy sweep. Its throughput is governed by the accumulator footprint per warp: shapes holding `block_m × block_n / num_warps == 2048` output elements reach 120+ TFLOP/s FP16, while 4096 exhausts the 256-register file and collapses to about 20 TFLOP/s. Narrow N is the secondary factor (N=32 above N=64, above N=16 and N=128). The generic vendor set measures less than half of the achievable rate. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
+- FP8 uses specially constructed inputs generated at runtime to retain strict numerical validation; structured sparsity instructions are not enabled. The default is 1024 repetitions, and both FP8 and FP4 cap `--iterations` at 4096 so the accumulation stays exactly representable. IEEE FP32 sweeps four smaller tile shapes. Other math modes use three shapes on NVIDIA/AMD and two smaller shapes on other vendors, combined with `1, 2, 4, 8 blocks/SM`. FP4's smallest `K` is 128 rather than the 64 the other narrow formats use: `K` must be a whole number of 32-element MX groups, and the Ascend MX path has no 64-element FP4 fractal, so it rejects `K=64` outright. Its tile list keeps the footprints of the other formats on that vendor branch and extends them to `K=512`, because FP4 packs two elements per byte: a deeper `K` costs the same operand bytes as half that `K` in FP8 while amortizing the MX scale fetch over more MACs. That matters — on Ascend950DT `K=512` measures about 1725 TFLOP/s against 1570 at `K=256`, a 10% difference that a `K=256`-only sweep would have silently reported as the chip's FP4 peak. The T-Head PPU backend instead sweeps four narrow-N shapes (`128×32` through `512×32`, plus `128×64`) with an extended `1..64 blocks/SM` occupancy sweep. Its throughput is governed by the accumulator footprint per warp: shapes holding `block_m × block_n / num_warps == 2048` output elements reach 120+ TFLOP/s FP16, while 4096 exhausts the 256-register file and collapses to about 20 TFLOP/s. Narrow N is the secondary factor (N=32 above N=64, above N=16 and N=128). The generic vendor set measures less than half of the achievable rate. `blocks/SM` is the ratio of grid size to compute-unit count and does not guarantee that all programs are resident simultaneously.
 
-JSON records `input_storage_dtype`, `dot_input_precision`, and `math_mode` separately. Compiled-kernel metadata distinguishes `execution_kind`, `instruction_precision_verified`, and `native_tensor_verified`: a successful SIMT instruction audit does not imply tensor execution. Compare peak results within the same math mode and execution category.
+JSON records `input_storage_dtype`, `dot_input_precision`, and `math_mode` separately; FP4 rows additionally record `container_dtype`, `elements_per_container`, `scale_format`, `scale_group_size`, and `dot_operation`, so the `uint8` container is never mistaken for the arithmetic format. Compiled-kernel metadata distinguishes `execution_kind`, `instruction_precision_verified`, and `native_tensor_verified`: a successful SIMT instruction audit does not imply tensor execution. Compare peak results within the same math mode and execution category.
 
 ```text
 FLOPs = 2 × tile_M × tile_N × tile_K × iterations × chains × blocks
@@ -149,11 +164,11 @@ python bench_tensor.py --mode gemm --dtype fp32 --input-precision ieee --sizes 2
 python bench_tensor.py --mode gemm --dtype fp32 --input-precision tf32 --sizes 2048 4096 8192
 ```
 
-Peak mode supports all seven Tensor/matrix formats. GEMM supports BF16, FP16, FP32, TF32, INT8, and FP64; FP8 remains peak-only. GEMM counts `2*M*N*K` floating-point or integer operations, excluding padding. Precision probes and NVIDIA/AMD instruction audits apply to both modes.
+Peak mode supports all eight Tensor/matrix formats. GEMM supports BF16, FP16, FP32, TF32, INT8, and FP64; FP8 and FP4 remain peak-only. GEMM counts `2*M*N*K` floating-point or integer operations, excluding padding. Precision probes and NVIDIA/AMD instruction audits apply to both modes.
 
 ## 2. Vector: Typed Independent Arithmetic Chains
 
-`bench_vector.py` supports BF16, FP16, FP32, INT8, FP64, and FP8 requests. It loads runtime inputs and coefficients, executes eight independent recurrence chains, and stores every result. The default is 4096 iterations per chain. Configurations with reported register spills are excluded from peak selection.
+`bench_vector.py` supports BF16, FP16, FP32, INT8, FP64, FP8, and FP4 requests. It loads runtime inputs and coefficients, executes eight independent recurrence chains, and stores every result. The default is 4096 iterations per chain. Configurations with reported register spills are excluded from peak selection.
 
 ```bash
 python bench_vector.py --dtype fp32 --iterations 4096 \
@@ -168,7 +183,7 @@ NVIDIA INT8 DP4A operations = 8 × 8 × elements_per_chain × iterations
 Other-backend typed INT8 MUL+ADD operations = 2 × 8 × elements_per_chain × iterations
 ```
 
-Floating-point modes count one multiplication plus one addition as 2 FLOPs. NVIDIA audits the generated PTX for the requested native FMA dtype and rejects tensor instructions or widened FP16/BF16 arithmetic. NVIDIA INT8 uses and audits `dp4a`: four signed INT8 products plus four INT32 additions per update, counted as 8 operations. Other backends try typed INT8 input, coefficients, state, and output with modulo-256 multiply plus add, counted as 2 operations. Integer overflow checks are disabled only for those two intentional modular operations so they remain typed INT8 in Triton IR. The full output is validated exactly; without final ISA evidence of native INT8 arithmetic, the suite retains a numeric rate as `unverified`. An explicit compiler rejection is reported as `unsupported`. Other successfully measured Vector formats without a native instruction audit also receive `unverified`. Floating output validation is exact for BF16/FP16 and bounded against FP64 references for FP32/FP64. FP8 currently returns `not_implemented` because the benchmark has no verified native FP8 vector arithmetic path; FP8 storage or Tensor instructions are not counted as Vector FP8 throughput.
+Floating-point modes count one multiplication plus one addition as 2 FLOPs. NVIDIA audits the generated PTX for the requested native FMA dtype and rejects tensor instructions or widened FP16/BF16 arithmetic. NVIDIA INT8 uses and audits `dp4a`: four signed INT8 products plus four INT32 additions per update, counted as 8 operations. Other backends try typed INT8 input, coefficients, state, and output with modulo-256 multiply plus add, counted as 2 operations. Integer overflow checks are disabled only for those two intentional modular operations so they remain typed INT8 in Triton IR. The full output is validated exactly; without final ISA evidence of native INT8 arithmetic, the suite retains a numeric rate as `unverified`. An explicit compiler rejection is reported as `unsupported`. Other successfully measured Vector formats without a native instruction audit also receive `unverified`. Floating output validation is exact for BF16/FP16 and bounded against FP64 references for FP32/FP64. FP8 currently returns `not_implemented` because the benchmark has no verified native FP8 vector arithmetic path; FP8 storage or Tensor instructions are not counted as Vector FP8 throughput. FP4 returns `unsupported` for a stronger reason, and the two statuses are deliberately different: FP8 is a gap in this benchmark, whereas FP4 is not an arithmetic element type anywhere in the stack. Triton exposes no FP4 scalar dtype, so there is no FP4 `tl.fma`/`tl.mul` overload to lower and no FP4 multiply-add can be written at all; PyTorch's `float4_e2m1fn_x2` is a two-element container, not a scalar type. The refusal needs no device and records the checked facts in `device.vector_fp4_capability_probe`, so it can be re-verified from the result file. FP4 packing, conversions, or microscaled matrix instructions are not counted as Vector FP4 throughput: where a chip executes FP4 natively on its matrix unit, that rate is the `tensor_fp4` metric.
 
 A backend can carry a dtype through loads, stores, and `*`/`+` while having no fused multiply-add lowering for it. Before sweeping, the benchmark compiles a small `tl.fma` probe for the requested dtype. MetaX fails this probe for BF16: the MACA backend represents BF16 as `i16`, which `llvm.intr.fma` rejects, so `tl.fma` fails in `ConvertTritonGPUToLLVM`.
 
@@ -261,6 +276,10 @@ The "measured peak" is the best result from the current sweep. It does not guara
 
 FlagGems regression records use `results/flaggems_*.json`. The four FP32/TF32 records documented below also use FlagGems. All other files matching `results/h20_peak_*.json` and `results/h20_gpu1_peak_*.json` contain peak measurements from before FlagGems integration. The original `h20_tensor.json`, `h20_vector.json`, and `h20_bandwidth.json` retain sustained-throughput results from the initial version. Interpret results in the context of each version's timing path, workload, and parameters. Historical H20 results do not imply that other chips have been tested.
 
+Tables measured by the native Ascend C suite in `ascendc/` are named `results/ascend950dt_ascendc_metrics.json`, with per-metric records in `results/ascend950dt_ascendc_metrics_runs/`. The `_ascendc_` segment is what distinguishes them from this suite's tables for the same chip; a document's `benchmark` field also states which implementation produced it (`chip_metric_suite` versus `ascendc_chip_metric_suite`). Rows from the Ascend C suite can carry two statuses this suite never emits, `measured_widened` and `not_built`.
+
+Three Ascend 950DT tables coexist and only one is current. `results/ascend950dt_17metrics.json` is this suite's present table and the one documented below. `results/ascend950dt_metrics.json` and `results/950dt_metrics.json` are earlier 15-row runs of this suite on the same chip, taken before the FP4 metrics existed; they are retained as history and are superseded row for row by the 17-row table. Check a document's row count, or whether it contains a `tensor_fp4` row at all, rather than relying on the file name.
+
 ### Backend Portability Validation
 
 - CPU-only tests cover NPU/MLU/MUSA graph interfaces, non-NVIDIA vendors using the `cuda` device name, coarse and missing event timing, graph resolution and zero-time fallback, missing device properties, capability reporting, requested Tensor/Vector dtype policies, suite status aggregation, and error handling. Any direct access to `torch.cuda` fails immediately in the runtime tests.
@@ -274,7 +293,52 @@ python bench_vector.py --quick --timing auto --warmup 2 --rep 5 --rounds 3
 python bench_vector.py --quick --timing events --warmup 2 --rep 5 --rounds 3
 ```
 
+### Ascend 950DT Complete Metric Table on 2026-11-05
+
+Full 17-metric suite on one idle Ascend950DT_9582 of eight (64 compute units, 91.75 GiB, 128 MiB L2) with PyTorch 2.10.0, Triton 3.6.0 (triton-ascend), and FlagGems 5.5.0.dev0+gda6b2b845 (vendor `ascend`), using FlagGems graph execution and device-event timing. No metric ended in `error`; both rows without a value are explicit capability rejections diagnosed before any sweep, not failed measurements.
+
+| Metric | Peak | Median | Unit | Status |
+| --- | ---: | ---: | --- | --- |
+| memory_capacity | 91.750 | - | GiB | `ok` |
+| memory_bandwidth | 3264.695 | 3260.236 | GB/s | `ok` |
+| tensor_bf16 | 430.348 | 430.267 | TFLOP/s | `unverified` |
+| tensor_fp16 | 430.375 | 430.305 | TFLOP/s | `unverified` |
+| tensor_fp32 | 26.965 | 26.959 | TFLOP/s | `unverified` |
+| tensor_tf32 | 215.622 | 215.604 | TFLOP/s | `unverified` |
+| tensor_int8 | 860.749 | 860.545 | TOP/s | `unverified` |
+| tensor_fp64 | - | - | TFLOP/s | `unsupported` |
+| tensor_fp8 | 860.751 | 860.618 | TFLOP/s | `unverified` |
+| tensor_fp4 | **1725.270** | 1725.185 | TFLOP/s | `unverified` |
+| vector_bf16 | 8.883 | 8.882 | TFLOP/s | `unverified` |
+| vector_fp16 | 18.532 | 18.530 | TFLOP/s | `unverified` |
+| vector_fp32 | 9.896 | 9.895 | TFLOP/s | `unverified` |
+| vector_int8 | 2.465 | 2.465 | TOP/s | `unverified` |
+| vector_fp64 | - | - | TFLOP/s | `unsupported` |
+| vector_fp8 | 5.430 | 5.429 | TFLOP/s | `unverified` |
+| vector_fp4 | - | - | TFLOP/s | `unsupported` |
+
+Every compute row is `unverified` because no final-ISA instruction auditor exists for vendor `ascend`; the rates are measured and every configuration passed numerical validation. The copy figure above is the headline bandwidth; the auxiliary read rate on the same run was 3847.693 GB/s peak (3838.059 median).
+
+The Tensor ladder matches the architecture's operand widths: FP4 at 1725 TFLOP/s is 2.0× FP8/INT8 (861), which is 2.0× BF16/FP16 (430), which is 2.0× TF32 (216). IEEE FP32 at 26.97 TFLOP/s sits far below TF32 because it is not a Cube-unit rate. The card's 32 Cube cores at 1650 MHz with 4096 MAC/cycle imply a 432.5 TFLOP/s BF16 ceiling, doubling per halved operand width to 1730.2 at FP4, so every row above is 99.5–99.7% of its architectural limit. FP4's selected configuration was tile `256×128×512` at 8 blocks/SM and 1024 iterations, with zero register spills; all 36 of its configurations validated exactly (`max_abs_error` 0).
+
+`tensor_fp4` is measured through `tl.dot_scaled` on the MX path. Before the sweep, a probe confirmed the backend both computes true E2M1 products (exact against the FP64 reference) and applies the E8M0 group scales (raising `A`'s scale from `2**0` to `2**1` exactly doubled the result). The compiled kernel lowers to `hfusion.matmul_mx` with `lhsFormat`/`rhsFormat` 3, the backend's E2M1 code. FP4 needs `K ≥ 128`: at `K=64` the link fails on an undefined `_mlir_ciface_mma_tile_int8_t_to_float`, since this CANN build ships no 64-element FP4 fractal.
+
+`vector_fp4` is `unsupported` rather than merely unmeasured, and this is a property of the format and toolchain rather than of this benchmark. Triton exposes no FP4 scalar dtype, so no FP4 multiply-add can be expressed at all. The hardware agrees: the Ascend C vector ISA headers give FP4 only conversion, load, store, and permute (`asc_e2m1x22bfloat16`, `asc_bfloat162e2m1x2_*`), while `reg_arith.h` and `reg_fused.h` — the vector arithmetic and FMA headers — list no FP4 type among their operands. The AIV unit can move and convert FP4 but cannot compute on it; the Cube unit is where this chip executes FP4, and that rate is `tensor_fp4`. `vector_fp8` is reported separately and differently: FP8 does keep typed `f8E4M3FN` arithmetic in the Ascend MLIR (64 sites in the selected kernel), so it retains a measured rate at `unverified`.
+
+`tensor_fp64` and `vector_fp64` are `unsupported` because FlagGems reports no FP64 capability for this device.
+
+```bash
+python bench_suite.py --device 1 --timing auto \
+  --output results/ascend950dt_17metrics.json
+```
+
+Raw records: [complete table](results/ascend950dt_17metrics.json), with per-metric JSON and logs in `results/ascend950dt_17metrics_runs/`.
+
+This chip is also measured natively in [`ascendc/`](ascendc/README.md), and the comparison is in [`ascendc/RESULTS.md`](ascendc/RESULTS.md). Every Tensor row above is confirmed to three significant figures by that independent implementation, which is the strongest available evidence that these are real peaks rather than a shared mistake. The Vector rows are not: Ascend C reaches 26.17 TFLOP/s BF16 against the 8.883 above, 15.90 TOP/s INT8 against 2.465, and measures a `vector_fp4` rate of 8.91 TFLOP/s where Triton reports `unsupported`. The `vector_fp4` difference is a toolchain limit on both sides of a real hardware gap — Triton has no FP4 scalar dtype to express the multiply-add, and the AIV has no FP4 arithmetic instruction either, so the Ascend C figure is an explicitly *converted* path through BF16 rather than a native FP4 vector peak. The other Vector gaps are compiler headroom in the Triton path.
+
 ### T-Head PPU (PPU-ZW810E) Complete Metric Table on 2026-10-29
+
+The PPU, MetaX and H20 tables below predate the FP4 metrics and were taken when the suite had 15 rows. Their `tensor_fp4` and `vector_fp4` rows were never run on those chips, so no FP4 claim is made for them either way.
 
 Full 15-metric suite on one idle PPU-ZW810E of sixteen (64 compute units, 95.6 GiB, 64 MiB L2) with PyTorch 2.13.0+v0.1.0.ppu2.2.0, Triton 3.7.0+v0.1.0.ppu2.2.0 (T-Head PPU backend), and FlagGems 5.3.0rc2+v0.1.0.ppu2.2.0 (vendor `thead`), with FlagGems graph execution and device-event timing. No metric ended in `error`.
 
