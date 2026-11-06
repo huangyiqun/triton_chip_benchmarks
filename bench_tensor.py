@@ -394,6 +394,7 @@ def _tensor_peak_kernel(
     BLOCKS: tl.constexpr, ITERATIONS: tl.constexpr,
     BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
     DOT_INPUT_PRECISION: tl.constexpr,
+    UNROLL: tl.constexpr = 1, B_TRANSPOSED: tl.constexpr = False,
 ):
     block = tl.program_id(0).to(tl.int64)
     rows = tl.arange(0, BLOCK_M)
@@ -402,7 +403,10 @@ def _tensor_peak_kernel(
     # Each operand is read from global memory once per CTA, before the loop.
     # Distinct B matrices prevent merging the two independent accumulators.
     a = tl.load(A + block * BLOCK_M * BLOCK_K + rows[:, None] * BLOCK_K + inner[None, :])
-    b_offsets = block * BLOCK_K * BLOCK_N + inner[:, None] * BLOCK_N + cols[None, :]
+    if B_TRANSPOSED:
+        b_offsets = block * BLOCK_K * BLOCK_N + cols[None, :] * BLOCK_K + inner[:, None]
+    else:
+        b_offsets = block * BLOCK_K * BLOCK_N + inner[:, None] * BLOCK_N + cols[None, :]
     b0 = tl.load(B + b_offsets)
     b1 = tl.load(B + BLOCKS * BLOCK_K * BLOCK_N + b_offsets)
     if A.dtype.element_ty == tl.int8:
@@ -413,11 +417,16 @@ def _tensor_peak_kernel(
         ACC_DTYPE: tl.constexpr = tl.float32
     acc0 = tl.full((BLOCK_M, BLOCK_N), 0, ACC_DTYPE)
     acc1 = tl.full((BLOCK_M, BLOCK_N), 0, ACC_DTYPE)
-    # Keep a real runtime loop (not static_range) to avoid code-size growth.
-    for _ in range(ITERATIONS):
+    # Keep the outer loop dynamic; only expand a small group of dot pairs.
+    for _ in range(ITERATIONS // UNROLL):
         # FP32 passes an explicit IEEE/TF32 policy. Other dtypes preserve the
         # backend's native dot policy; forcing exact FP8 accumulation can
         # demote an FP8 operation to FP16 MMA on some targets.
+        for _ in tl.static_range(UNROLL):
+            acc0 = tl.dot(a, b0, acc0, input_precision=DOT_INPUT_PRECISION, out_dtype=ACC_DTYPE)
+            acc1 = tl.dot(a, b1, acc1, input_precision=DOT_INPUT_PRECISION, out_dtype=ACC_DTYPE)
+    # Preserve arbitrary iteration counts, including the one-dot lowering probe.
+    for _ in tl.static_range(ITERATIONS % UNROLL):
         acc0 = tl.dot(a, b0, acc0, input_precision=DOT_INPUT_PRECISION, out_dtype=ACC_DTYPE)
         acc1 = tl.dot(a, b1, acc1, input_precision=DOT_INPUT_PRECISION, out_dtype=ACC_DTYPE)
     c_offsets = block * BLOCK_M * BLOCK_N + rows[:, None] * BLOCK_N + cols[None, :]
@@ -540,8 +549,13 @@ def _peak_configs(vendor: str, dtype: str = "fp16",
                        (256, 128, 2 * k, 4), (128, 256, 2 * k, 4),
                        (256, 128, 4 * k, 4), (128, 256, 4 * k, 4),
                        (128, 128, 8 * k, 4)]
-    return [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
+    configs = [dict(block_m=m, block_n=n, block_k=k, num_warps=w,
                  num_stages=1, chains=2) for m, n, k, w in choices]
+    if vendor == "thead" and dtype == "int8":
+        # PPU-ZW810E resident INT8 peak; retain original candidates as baselines.
+        configs.append(dict(block_m=128, block_n=16, block_k=128, num_warps=2,
+                            num_stages=2, chains=2, unroll=4, b_transposed=True))
+    return configs
 
 
 def _launch_peak(a, b, c, iterations: int, config: dict[str, int],
@@ -561,6 +575,7 @@ def _launch_peak(a, b, c, iterations: int, config: dict[str, int],
         a, b, c, BLOCKS=blocks, ITERATIONS=iterations,
         BLOCK_M=config["block_m"], BLOCK_N=config["block_n"], BLOCK_K=config["block_k"],
         DOT_INPUT_PRECISION=dot_input_precision,
+        UNROLL=config.get("unroll", 1), B_TRANSPOSED=b.stride(-2) == 1,
         num_warps=config["num_warps"], num_stages=config["num_stages"],
     )
 
@@ -629,6 +644,10 @@ def _peak_inputs(blocks: int, config: dict[str, int], dtype: torch.dtype, device
     else:
         a = torch.randint(-1, 2, (blocks, m, k), device=device).float().mul_(1 / 16).to(dtype)
         b = torch.randint(-1, 2, (2, blocks, k, n), device=device).float().mul_(1 / 16).to(dtype)
+    if config.get("b_transposed", False):
+        # Preserve logical [chain, block, K, N] for the unchanged reference.
+        # Layout preparation is outside the resident-kernel timing.
+        b = b.transpose(-1, -2).contiguous().transpose(-1, -2)
     c = torch.empty((2, blocks, m, n), dtype=_output_dtype(dtype), device=device)
     return a, b, c
 
@@ -1092,6 +1111,8 @@ def run_peak(args, metadata: dict, dtype: torch.dtype, device) -> None:
         # per SM and plateaus around 16-32 blocks/SM (measured on
         # PPU-ZW810E), so extend the default occupancy sweep for this vendor.
         blocks_per_sm_values += [16, 32, 64]
+        if args.dtype == "int8":
+            blocks_per_sm_values += [128]
     precision_text = (f"FP32 storage, {args.input_precision.upper()} dot precision"
                       if args.dtype == "fp32" else
                       "MX FP4 (E2M1) operands with E8M0 group scales"
