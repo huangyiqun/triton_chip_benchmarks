@@ -1,0 +1,23 @@
+/flagos/lib/python3.10/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:0: BW | vendor=hygon | Triton=hip/gfx936 | compute units=80 | memory=64.0 GiB
+FlagGems 5.3.4, PyTorch 2.9.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident int8 operands, two independent INT32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TOPS  peak TOPS  regs
+Timing: graph via FlagGems hygon device events
+   64/64/64          1      4     0.0954    0.0954       900.50     900.79    72
+   64/64/64          2      4     0.1842    0.1840       932.58     933.48    72
+   64/64/64          4      4     0.3630    0.3629       946.54     946.74    72
+   64/64/64          8      4     0.7161    0.7159       959.63     959.90    72
+  64/128/64          1      4     0.1897    0.1896       905.60     905.99   116
+  64/128/64          2      4     0.3675    0.3675       934.88     935.09   116
+  64/128/64          4      4     0.7207    0.7206       953.50     953.66   116
+  64/128/64          8      4     1.4268    1.4260       963.28     963.83   116
+  128/64/64          1      4     0.1868    0.1868       919.80     919.92   115
+  128/64/64          2      4     0.3645    0.3642       942.76     943.46   115
+  128/64/64          4      4     0.7171    0.7170       958.31     958.39   115
+  128/64/64          8      4     1.4221    1.4219       966.42     966.56   115
+Measured tensor peak: 966.56 TOPS (same configuration median 966.42 TOPS; best observed timing sample, dense int8)
+JSON: /workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_int8.json

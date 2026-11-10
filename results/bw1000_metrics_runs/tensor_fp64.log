@@ -1,0 +1,15 @@
+/flagos/lib/python3.10/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:0: BW | vendor=hygon | Triton=hip/gfx936 | compute units=80 | memory=64.0 GiB
+FlagGems 5.3.4, PyTorch 2.9.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp64 operands, two independent FP64 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   32/32/16          1      4     0.4415    0.4413        12.16      12.17   213
+   32/32/16          2      4     0.7705    0.7704        13.94      13.94   213
+   32/32/16          4      4     1.4756    1.4756        14.55      14.55   213
+   32/32/16          8      4     2.8771    2.8770        14.93      14.93   213
+Measured FP64 matrix throughput: 14.93 TFLOP/s (same configuration median 14.93 TFLOP/s; best observed timing sample, dense fp64)
+JSON: /workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_fp64.json

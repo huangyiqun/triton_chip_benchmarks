@@ -1,0 +1,23 @@
+/flagos/lib/python3.10/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:0: BW | vendor=hygon | Triton=hip/gfx936 | compute units=80 | memory=64.0 GiB
+FlagGems 5.3.4, PyTorch 2.9.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident bf16 operands, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   64/64/32          1      4     0.0941    0.0941       456.44     456.54    69
+   64/64/32          2      4     0.1829    0.1829       469.57     469.64    69
+   64/64/32          4      4     0.3614    0.3613       475.40     475.48    69
+   64/64/32          8      4     0.7134    0.7133       481.61     481.71    69
+  64/128/32          1      4     0.1892    0.1892       453.90     454.04   115
+  64/128/32          2      4     0.3667    0.3667       468.44     468.48   115
+  64/128/32          4      4     0.7193    0.7192       477.66     477.75   115
+  64/128/32          8      4     1.4241    1.4240       482.54     482.57   115
+  128/64/32          1      4     0.1890    0.1890       454.49     454.58   116
+  128/64/32          2      4     0.3663    0.3663       468.96     469.05   116
+  128/64/32          4      4     0.7189    0.7189       477.92     477.98   116
+  128/64/32          8      4     1.4239    1.4237       482.63     482.67   116
+Measured tensor peak: 482.67 TFLOP/s (same configuration median 482.63 TFLOP/s; best observed timing sample, dense bf16)
+JSON: /workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_bf16.json

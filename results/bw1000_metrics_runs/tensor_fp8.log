@@ -1,0 +1,23 @@
+/flagos/lib/python3.10/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:0: BW | vendor=hygon | Triton=hip/gfx936 | compute units=80 | memory=64.0 GiB
+FlagGems 5.3.4, PyTorch 2.9.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident fp8 operands, two independent FP32 accumulator chains
+FP8 E4M3FN: backend accumulation policy (internal precision is hardware-dependent); exact-check inputs
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+  config={'block_m': 64, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 64, 'block_n': 128, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 128, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 128, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 128, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+  config={'block_m': 128, 'block_n': 64, 'block_k': 64, 'num_warps': 4, 'num_stages': 1, 'chains': 2}: unsupported (Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.)
+UNSUPPORTED: Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.
+JSON: /workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_fp8.json

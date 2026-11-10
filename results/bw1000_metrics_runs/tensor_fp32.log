@@ -1,0 +1,27 @@
+/flagos/lib/python3.10/site-packages/flag_gems/utils/libentry.py:411: RuntimeWarning: active Triton backend does not provide a replay benchmarker; falling back to event timing
+  resolved_benchmark = resolve_benchmarker(
+Device cuda:0: BW | vendor=hygon | Triton=hip/gfx936 | compute units=80 | memory=64.0 GiB
+FlagGems 5.3.4, PyTorch 2.9.0, Triton 3.6.0; timing=auto, warmup=100 ms, rep=200 ms
+
+Matrix peak: resident FP32 storage, IEEE dot precision, two independent FP32 accumulator chains
+Iterations=1024; operations=2*tile_M*tile_N*tile_K*iterations*chains*blocks
+ tile M/N/K  blocks/SM  warps  median ms    min ms  median TFLOP/s  peak TFLOP/s  regs
+Timing: graph via FlagGems hygon device events
+   32/32/32          1      4     0.1801    0.1799        59.62      59.67    37
+   32/32/32          2      4     0.3551    0.3548        60.47      60.52    37
+   32/32/32          4      4     0.7065    0.7060        60.79      60.83    37
+   32/32/32          8      4     1.4117    1.4114        60.85      60.86    37
+   32/64/32          1      4     0.3576    0.3573        60.06      60.10    55
+   32/64/32          2      4     0.7083    0.7079        60.63      60.68    55
+   32/64/32          4      4     1.4138    1.4128        60.76      60.80    55
+   32/64/32          8      4     2.8156    2.8154        61.02      61.02    55
+   64/32/32          1      4     0.3576    0.3575        60.06      60.06    56
+   64/32/32          2      4     0.7081    0.7080        60.66      60.67    56
+   64/32/32          4      4     1.4127    1.4127        60.80      60.81    56
+   64/32/32          8      4     2.8173    2.8170        60.98      60.99    56
+   64/64/32          1      4     0.7096    0.7092        60.53      60.56    89
+   64/64/32          2      4     1.4123    1.4122        60.82      60.83    89
+   64/64/32          4      4     2.8170    2.8167        60.99      60.99    89
+   64/64/32          8      4     5.6184    5.6181        61.16      61.16    89
+Measured IEEE FP32 matrix throughput: 61.16 TFLOP/s (same configuration median 61.16 TFLOP/s; best observed timing sample, dense ieee_fp32)
+JSON: /workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_fp32.json
