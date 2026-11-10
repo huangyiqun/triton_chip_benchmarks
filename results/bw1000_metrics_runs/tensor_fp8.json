@@ -1,0 +1,258 @@
+{
+  "benchmark": "tensor",
+  "status": "unsupported",
+  "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype.",
+  "timestamp_utc": "2026-11-10T05:48:31.376187+00:00",
+  "device": {
+    "device_index": 0,
+    "device_type": "cuda",
+    "device_name": "BW",
+    "vendor_name": "hygon",
+    "backend": "hip",
+    "architecture": "gfx936",
+    "sm_count": 80,
+    "compute_units_source": "FlagGems device API",
+    "total_memory_bytes": 68702699520,
+    "memory_capacity_gib": 63.984375,
+    "l2_cache_bytes": 8388608,
+    "l2_cache_source": "device properties",
+    "supports_fp64": true,
+    "supports_bf16": true,
+    "torch_version": "2.9.0",
+    "triton_version": "3.6.0",
+    "flaggems_version": "5.3.4",
+    "device_api": "torch.cuda",
+    "input_format": "e4m3fn",
+    "input_storage_dtype": "e4m3fn",
+    "dot_input_precision": null,
+    "math_mode": "fp8",
+    "tensor_storage_probe": {
+      "passed": true,
+      "max_abs_error": 0.0,
+      "probe_values": [
+        0.0625,
+        -0.0625,
+        1.0
+      ],
+      "description": "FP8 E4M3FN storage round-trip of exactly representable values"
+    },
+    "tensor_dot_lowering_probe": {
+      "passed": true,
+      "kernel_mode": "peak",
+      "probed_tile": "64x64x64",
+      "rejected_tiles": [],
+      "description": "FP8 tl.dot lowering probe"
+    }
+  },
+  "arguments": {
+    "mode": "peak",
+    "iterations": 1024,
+    "blocks_per_sm": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "sizes": [
+      2048,
+      4096,
+      8192
+    ],
+    "dtype": "fp8",
+    "input_precision": null,
+    "quick": false,
+    "device": 0,
+    "warmup": 100.0,
+    "rep": 200.0,
+    "timing": "auto",
+    "batch_ms": 10.0,
+    "rounds": 10,
+    "compute_units": null,
+    "l2_mib": null,
+    "output": "/workspace/FlagPerf/triton_chip_benchmarks/results/bw1000_metrics_runs/tensor_fp8.json",
+    "requested_dtype": "fp8"
+  },
+  "results": [],
+  "details": [
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 1,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 2,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 4,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 8,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 1,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 2,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 4,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 64,
+        "block_n": 128,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 8,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 128,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 1,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 128,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 2,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 128,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 4,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    },
+    {
+      "mode": "peak",
+      "dtype": "fp8",
+      "config": {
+        "block_m": 128,
+        "block_n": 64,
+        "block_k": 64,
+        "num_warps": 4,
+        "num_stages": 1,
+        "chains": 2
+      },
+      "blocks_per_sm": 8,
+      "status": "unsupported",
+      "reason": "Cannot verify native fp8 MMA for hygon; compiled instructions: ['v_mmac_f32_16x16x16_f16']. The selected target may not support this format or this compiler may lower it to another dtype."
+    }
+  ]
+}

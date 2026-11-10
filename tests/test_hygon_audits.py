@@ -198,6 +198,23 @@ class HygonVectorAuditTests(unittest.TestCase):
         self.assertGreater(result["amdgcn_arithmetic_instruction_sites"], 0)
         self.assertIn("unverified", result["assembly_check"])
 
+    def test_int8_dp4a_on_amdgcn_is_a_native_rate(self):
+        # gfx936 assembles v_dot4_i32_i8, the AMDGCN spelling of DP4A. When the
+        # kernel really issued it the rate is native INT8, not the emulated
+        # typed multiply/add, so the audit must verify rather than warn.
+        result = self.inspect("int8", gcn("v_dot4_i32_i8", "v_dot4_i32_i8"))
+        self.assertTrue(result["native_arithmetic_verified"])
+        self.assertEqual(result["amdgcn_arithmetic_instruction_sites"], 2)
+        self.assertIn("DP4A", result["assembly_check"])
+        self.assertNotIn("unverified", result["assembly_check"])
+
+    def test_int8_emulated_path_is_still_unverified_alongside_dp4a(self):
+        # A listing whose only integer arithmetic is the wide typed path keeps
+        # the earlier unverified verdict; the DP4A branch must not leak into it.
+        result = self.inspect("int8", gcn("v_mul_lo_u16_e32"))
+        self.assertFalse(result["native_arithmetic_verified"])
+        self.assertIn("no DP4A", result["assembly_check"])
+
     def test_matrix_instructions_in_a_vector_kernel_are_an_error(self):
         for instruction in ("v_mmac_f32_16x16x16_f16", "v_mfma_f32_16x16x16f16"):
             with self.subTest(instruction=instruction):

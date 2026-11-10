@@ -132,10 +132,29 @@ def _widened_fma_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr):
 
 
 @triton.jit
-def _dp4a_update(x, a, b):
+def _dp4a_update(x, a, b, GCN: tl.constexpr = False):
+    # The same four-product-plus-four-accumulate operation has two spellings.
+    # NVIDIA's PTX names it dp4a; the AMDGCN path spells it v_dot4_i32_i8 and
+    # needs VGPR operands ("v") rather than the scalar-class "r" constraint.
+    if GCN:
+        return tl.inline_asm_elementwise(
+            "v_dot4_i32_i8 $0, $1, $2, $3;", constraints="=v,v,v,v",
+            args=[x, a, b], dtype=tl.int32, is_pure=True, pack=1)
     return tl.inline_asm_elementwise(
         "dp4a.s32.s32 $0, $1, $2, $3;", constraints="=r,r,r,r",
         args=[x, a, b], dtype=tl.int32, is_pure=True, pack=1)
+
+
+@triton.jit
+def _dp4a_probe_kernel(Input, Output, BLOCK_SIZE: tl.constexpr,
+                       GCN: tl.constexpr = False):
+    # Operands load at runtime so the probe cannot be constant folded before
+    # the backend has to emit a real DP4A / v_dot4_i32_i8.
+    offsets = tl.arange(0, BLOCK_SIZE)
+    x = tl.load(Input + offsets)
+    a = tl.load(Input + offsets + BLOCK_SIZE)
+    b = tl.load(Input + offsets + 2 * BLOCK_SIZE)
+    tl.store(Output + offsets, _dp4a_update(x, a, b, GCN))
 
 
 @triton.jit
@@ -149,9 +168,10 @@ def _int8_mul_add_update(x, a, b):
 
 @triton.jit
 def _chain_step(x, a, b, IS_INT8: tl.constexpr, USE_DP4A: tl.constexpr,
-                USE_EXPLICIT_FMA: tl.constexpr, USE_WIDENED_FMA: tl.constexpr = False):
+                USE_EXPLICIT_FMA: tl.constexpr, USE_WIDENED_FMA: tl.constexpr = False,
+                GCN_DP4A: tl.constexpr = False):
     if IS_INT8 and USE_DP4A:
-        return _dp4a_update(x, a, b)
+        return _dp4a_update(x, a, b, GCN_DP4A)
     if IS_INT8:
         return _int8_mul_add_update(x, a, b)
     if USE_WIDENED_FMA:
@@ -166,7 +186,8 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
                       IS_INT8: tl.constexpr = False, USE_DP4A: tl.constexpr = False,
                       FULLY_STATIC: tl.constexpr = False,
                       USE_WIDENED_FMA: tl.constexpr = False,
-                      BROADCAST_COEFFICIENTS: tl.constexpr = False):
+                      BROADCAST_COEFFICIENTS: tl.constexpr = False,
+                      GCN_DP4A: tl.constexpr = False):
     offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     # Runtime input loads keep all lanes and chains independent. Repeating a
     # formula every warp/program could let the compiler merge equal chains.
@@ -233,14 +254,14 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
         # accepts for those types is a fully unrolled body. Code size grows
         # with ITERATIONS, which is why the caller lowers the iteration count.
         for _static in tl.static_range(ITERATIONS):
-            x0 = _chain_step(x0, a, b0, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x1 = _chain_step(x1, a, b1, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x2 = _chain_step(x2, a, b2, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x3 = _chain_step(x3, a, b3, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x4 = _chain_step(x4, a, b4, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x5 = _chain_step(x5, a, b5, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x6 = _chain_step(x6, a, b6, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
-            x7 = _chain_step(x7, a, b7, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA)
+            x0 = _chain_step(x0, a, b0, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x1 = _chain_step(x1, a, b1, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x2 = _chain_step(x2, a, b2, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x3 = _chain_step(x3, a, b3, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x4 = _chain_step(x4, a, b4, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x5 = _chain_step(x5, a, b5, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x6 = _chain_step(x6, a, b6, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
+            x7 = _chain_step(x7, a, b7, IS_INT8, USE_DP4A, USE_EXPLICIT_FMA, USE_WIDENED_FMA, GCN_DP4A)
     else:
         # Explicitly unroll a small group of iterations to amortize loop control.
         # The CLI requires exact divisibility, so each lane still executes exactly
@@ -251,14 +272,14 @@ def vector_fma_kernel(Input, Output, Coefficients, ELEMENTS: tl.constexpr,
             # reject when they check loop-carried types.
             for _unrolled in tl.static_range(UNROLL):
                 if IS_INT8 and USE_DP4A:
-                    x0 = _dp4a_update(x0, a, b0)
-                    x1 = _dp4a_update(x1, a, b1)
-                    x2 = _dp4a_update(x2, a, b2)
-                    x3 = _dp4a_update(x3, a, b3)
-                    x4 = _dp4a_update(x4, a, b4)
-                    x5 = _dp4a_update(x5, a, b5)
-                    x6 = _dp4a_update(x6, a, b6)
-                    x7 = _dp4a_update(x7, a, b7)
+                    x0 = _dp4a_update(x0, a, b0, GCN_DP4A)
+                    x1 = _dp4a_update(x1, a, b1, GCN_DP4A)
+                    x2 = _dp4a_update(x2, a, b2, GCN_DP4A)
+                    x3 = _dp4a_update(x3, a, b3, GCN_DP4A)
+                    x4 = _dp4a_update(x4, a, b4, GCN_DP4A)
+                    x5 = _dp4a_update(x5, a, b5, GCN_DP4A)
+                    x6 = _dp4a_update(x6, a, b6, GCN_DP4A)
+                    x7 = _dp4a_update(x7, a, b7, GCN_DP4A)
                 elif IS_INT8:
                     x0 = _int8_mul_add_update(x0, a, b0)
                     x1 = _int8_mul_add_update(x1, a, b1)
@@ -670,19 +691,32 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
         if tensor_ops:
             raise RuntimeError("Generated AMDGCN contains matrix instructions in a vector benchmark")
         promoted_from = None
+        native_dp4a = False
         if dtype == "int8":
-            # Neither target exposes DP4A through this path, so the INT8 kernel
-            # is the typed modulo-256 multiply plus add. Count the integer
-            # arithmetic it lowers to. Width matters: the DCU keeps this path in
+            # The INT8 kernel is either the native DP4A or the typed modulo-256
+            # multiply plus add, depending on what the target assembles; the
+            # listing decides which. First count the integer arithmetic the
+            # emulated path lowers to. Width matters: the DCU keeps that path in
             # 16-bit integer ops (v_mul_lo_u16, v_mad_legacy_u16), which still
             # carry the INT8 values the kernel declared, so the 16- and 32-bit
-            # spellings both count as typed integer arithmetic. As on the other
-            # non-DP4A vendors this is not final proof of a native INT8
-            # execution unit, so the suite keeps the rate unverified.
+            # spellings both count as typed integer arithmetic. On the other
+            # non-DP4A vendors that is not final proof of a native INT8
+            # execution unit, so the suite keeps that rate unverified.
             instruction_count = len(re.findall(
                 r"\bv_(?:mul_(?:lo_|hi_)?|mad_(?:legacy_)?)[iu](?:8|16|32)(?:_e(?:32|64))?\b",
                 gcn))
             instruction = "typed integer multiply/add (no DP4A on this target)"
+            # gfx936 assembles v_dot4_i32_i8, the AMDGCN spelling of DP4A: four
+            # signed INT8 products plus four INT32 additions in one instruction.
+            # When the kernel actually issued it, the rate is a native INT8 rate
+            # and the earlier "no DP4A here" note was a stale vendor-based guess.
+            dp4a_sites = len(re.findall(r"\bv_dot4_i32_i8\b", gcn))
+            if dp4a_sites:
+                instruction_count = dp4a_sites
+                instruction = "signed INT8 DP4A (v_dot4_i32_i8) with INT32 output"
+                native_dp4a = True
+            else:
+                native_dp4a = False
         else:
             width = {"fp16": "f16", "bf16": "bf16", "fp32": "f32", "fp64": "f64"}[dtype]
             instruction_count = len(re.findall(
@@ -710,7 +744,8 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
             # Only a floating FMA naming the requested element width proves the
             # requested dtype executed natively. A widened narrow dtype and the
             # INT8 integer path both fail that test.
-            "native_arithmetic_verified": dtype != "int8" and promoted_from is None,
+            "native_arithmetic_verified": (dtype == "int8" and native_dp4a)
+                                         or (dtype != "int8" and promoted_from is None),
         })
         if promoted_from is not None:
             result.update({
@@ -721,6 +756,9 @@ def inspect_assembly(compiled, vendor_name, dtype="fp32", backend=None):
                     f"was promoted to {', '.join(promoted_from)}, so this is not a native "
                     f"{dtype.upper()} vector rate"),
             })
+        elif dtype == "int8" and native_dp4a:
+            result["assembly_check"] = (
+                f"passed ({instruction}; no matrix instructions)")
         elif dtype == "int8":
             result["assembly_check"] = (
                 f"unverified: AMDGCN contains {instruction_count} typed integer "
@@ -816,6 +854,33 @@ def backend_supports_explicit_fma(dtype, device):
         first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
         return False, (f"Backend cannot lower tl.fma for {dtype.upper()}; "
                        f"using source multiply plus add: {first_line}")
+    finally:
+        probe_input = probe_output = None
+    return True, None
+
+
+def backend_supports_dp4a(device, gcn=False):
+    """Compile one tiny kernel to see whether this target assembles DP4A.
+
+    The selector used to enable DP4A only for the NVIDIA vendor name, which is a
+    vendor test, not a capability test. gfx936 assembles `v_dot4_i32_i8`, the
+    AMDGCN spelling of the same four-int8-products-plus-INT32-accumulate
+    operation, so the emulated typed path was measuring roughly a quarter of
+    what the hardware executes. Probing keeps a target whose assembler rejects
+    the mnemonic on the emulated path instead of guessing from the vendor name.
+    Returns the probe outcome and a reason string for the JSON record.
+    """
+    block = 32
+    try:
+        probe_input = torch.randint(-100, 100, (3 * block,), dtype=torch.int32,
+                                    device=device)
+        probe_output = torch.empty((block,), dtype=torch.int32, device=device)
+        _dp4a_probe_kernel[(1,)](probe_input, probe_output, block,
+                                 GCN=gcn, num_warps=4)
+    except Exception as exc:  # noqa: BLE001 - any failure means no native DP4A here
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        return False, (f"Backend cannot assemble DP4A on this target; using the typed "
+                       f"modulo-256 INT8 path instead: {first_line}")
     finally:
         probe_input = probe_output = None
     return True, None
@@ -967,10 +1032,13 @@ def configure_sweep(args, metadata):
 def launch_vector(kernel, grid, inputs, output, coefficients, elements, iterations,
                   block_size, unroll, use_explicit_fma, num_warps,
                   is_int8=False, use_dp4a=False, fully_static=False,
-                  use_widened_fma=False, broadcast_coefficients=False):
+                  use_widened_fma=False, broadcast_coefficients=False,
+                  gcn_dp4a=False):
     launch_options = {} if num_warps is None else {"num_warps": num_warps}
     if is_int8:
         launch_options.update(IS_INT8=True, USE_DP4A=use_dp4a)
+        if gcn_dp4a:
+            launch_options.update(GCN_DP4A=True)
     if fully_static:
         launch_options.update(FULLY_STATIC=True)
     if use_widened_fma:
@@ -1228,7 +1296,22 @@ def run_benchmark(args, metadata, is_xpu):
                          "supply the chip's count with --compute-units")
     device = get_device(args)
     is_int8 = args.dtype == "int8"
-    use_dp4a = is_int8 and not is_xpu and metadata["vendor_name"] == "nvidia"
+    # DP4A is not NVIDIA-only. gfx936 (Hygon BW1000) assembles
+    # v_dot4_i32_i8, the AMDGCN spelling of the same four-int8-products-plus-
+    # INT32-accumulate instruction, so the native path is offered there too
+    # instead of silently falling back to the typed modulo-256 emulation that
+    # measures roughly a quarter of the native rate. The probe decides, not the
+    # vendor name: a target whose assembler rejects the mnemonic keeps the
+    # emulated path and its unverified status.
+    gcn_dp4a = (is_int8 and not is_xpu
+                and metadata["vendor_name"] in VECTOR_AMDGCN_VENDORS)
+    use_dp4a = is_int8 and not is_xpu and (
+        metadata["vendor_name"] == "nvidia" or gcn_dp4a)
+    dp4a_reason = None
+    if use_dp4a:
+        use_dp4a, dp4a_reason = backend_supports_dp4a(device, gcn_dp4a)
+        if not use_dp4a:
+            gcn_dp4a = False
     # On backends without NVIDIA DP4A, try typed INT8 arithmetic. If final ISA
     # cannot be audited, keep the numeric result but mark it unverified.
     int8_mul_add = is_int8 and not use_dp4a
@@ -1262,6 +1345,8 @@ def run_benchmark(args, metadata, is_xpu):
     if int8_mul_add:
         print("Typed INT8 path uses INT8 input, coefficients, state and output with modulo-256 multiply/add; "
               "native instruction verification requires explicit final ISA evidence")
+        if dp4a_reason:
+            print(dp4a_reason)
     elif is_int8:
         print("INT8 lanes are packed in INT32 words; each dot4 uses four signed products "
               "and an INT32 bias, with its result supplying the next packed input")
@@ -1328,6 +1413,7 @@ def run_benchmark(args, metadata, is_xpu):
                             elements, iterations, block_size, unroll_value,
                             use_explicit_fma, num_warps, is_int8, use_dp4a,
                             fully_static, use_widened_fma, broadcast_coefficients,
+                            gcn_dp4a,
                         )
 
                     try:
@@ -1402,6 +1488,8 @@ def run_benchmark(args, metadata, is_xpu):
                         "hardware_fusion_verified": bool(use_explicit_fma
                                                          and assembly["native_arithmetic_verified"]),
                         "explicit_fma_supported": use_explicit_fma,
+                        "dp4a_used": use_dp4a,
+                        "dp4a_probe_reason": dp4a_reason,
                         "fma_fallback_reason": fma_fallback_reason,
                         "widened_fma_used": use_widened_fma,
                         "widened_fma_reason": widened_fma_reason,
