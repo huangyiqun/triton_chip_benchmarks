@@ -8,6 +8,7 @@ import unittest
 from unittest import mock
 
 import bench_bandwidth as bandwidth
+import torch
 
 
 class RecordingKernel:
@@ -48,6 +49,13 @@ class BandwidthBackendTests(unittest.TestCase):
                          ["copy", "read", "write"])
         for mode in ("copy", "read", "write"):
             self.assertEqual(bandwidth.selected_modes(SimpleNamespace(mode=mode)), [mode])
+
+    def test_write_validation_requires_every_element(self):
+        self.assertEqual(bandwidth.check_write(torch.full((4,), 1.0))["correctness"],
+                         "passed (full output and masked tail)")
+        with self.assertRaises(AssertionError):
+            # The NaN sentinel survives when a store misses an element.
+            bandwidth.check_write(torch.tensor([1.0, float("nan"), 1.0]))
 
     def test_cuda_name_does_not_select_nvidia_cache_modifier(self):
         kernel = RecordingKernel()
