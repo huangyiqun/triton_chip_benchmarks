@@ -164,8 +164,8 @@ def run_suite(args):
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "status": "running", "device": {}, "smoke_only": args.quick,
         "measurement_policy": "Highest observed valid throughput; median from the same configuration. "
-                              "Capacity is reported device capacity. Bandwidth is effective copy read+write "
-                              "traffic with HBM-sized buffers; read rates are auxiliary details. "
+                              "Capacity is reported device capacity. Bandwidth is the fastest HBM-sized "
+                              "memory pattern (copy, read or write) with all rates kept as details. "
                               "Unsupported and not-implemented metrics have no numeric value; "
                               "errors do not imply unsupported hardware.",
         "results": [empty_metric(metric) for metric in METRICS],

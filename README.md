@@ -6,7 +6,7 @@ The complete report contains these 17 rows:
 
 | Group | Metrics |
 | --- | --- |
-| Memory | Capacity (GiB), effective copy bandwidth (GB/s) |
+| Memory | Capacity (GiB), effective device-memory bandwidth (GB/s) |
 | Tensor/matrix | BF16, FP16, FP32, TF32, INT8, FP64, FP8, FP4 |
 | Vector | BF16, FP16, FP32, INT8, FP64, FP8, FP4 |
 
@@ -110,7 +110,7 @@ Result status has a strict meaning:
 - `unsupported`: the selected PyTorch/FlagGems/backend stack explicitly lacks the requested storage or arithmetic capability, or the compiler/instruction audit rejects the requested native dtype. The numeric value remains `null`; the reason identifies which layer rejected it and does not automatically prove a hardware limit.
 - `not_implemented`: the benchmark has no verified native path for the requested metric. This is a benchmark limitation and does not determine whether the chip supports it. The numeric value remains `null`.
 - `error`: device discovery, memory, timing, correctness, or another operational failure. An error is not treated as evidence that the chip lacks the dtype.
-- `not_measured`: no eligible HBM-sized copy result is available, because the run uses quick mode, buffers are too small, or L2 capacity is unknown. Observed copy/read rates remain in the auxiliary `patterns` details.
+- `not_measured`: no eligible HBM-sized bandwidth result is available, because the run uses quick mode, buffers are too small, or L2 capacity is unknown. Observed copy/read/write rates remain in the `patterns` details.
 - `unavailable`: the backend did not report device-memory capacity.
 
 Use quick mode to check integration only; its rates are not peak results:
@@ -221,28 +221,34 @@ python bench_vector.py --timing events \
 
 The legacy option name `--blocks-per-sm` means programs per reported compute unit; on XPU that unit is a cluster. If an older runtime cannot report this value, pass the verified cluster count with `--compute-units`.
 
-## 3. Bandwidth: Streaming Reads and Copies
+## 3. Bandwidth: Streaming Reads, Writes and Copies
 
-`bench_bandwidth.py` defaults to `--mode all`, sweeping `read` and `copy` separately. Default source-array sizes are `256, 512, 1024, 2048 MiB`, combined with different block/warp configurations.
+`bench_bandwidth.py` defaults to `--mode all`, sweeping `copy`, `read` and `write` separately. Default source-array sizes are `256, 512, 1024, 2048 MiB`, combined with different block/warp configurations.
 
 - `copy`: executes `dst[i] = src[i]`, counts both source reads and destination writes, and checks equality for every element.
 - `read`: reads all elements, reduces them within each block, and writes one FP32 result per block so the compiler cannot remove the loads. All reduction results are checked. Traffic includes source reads and the small result writes; reduction overhead is included in the measured time.
+- `write`: stores a constant into every element of the destination. Traffic counts only the stores. A NaN sentinel is written before the validated launch, and a store that misses any element leaves that element non-one, so a partial or absent store fails validation.
+- The `memory_bandwidth` row is the **fastest eligible pattern**, and its `configuration.pattern` field records whether copy, read or write supplied it. Every rate remains in `patterns`. Copy moves a byte in each direction over the same memory bus, so a controller that pays a read/write turnaround penalty measures copy below the one-way patterns; on Ascend 910B4 the validated rates are 1.26 TB/s copy versus 1.49 TB/s read and 1.49 TB/s write, and reporting copy alone would understate the device. The faster pattern is the achievable HBM bandwidth and matches how vendors quote it.
 - The default arrays are much larger than H20's L2 cache. A result enters the peak summary for HBM-sized workloads only when the source array is at least 4 times the known L2 capacity and the run is not in smoke mode. Small arrays and results with unknown L2 capacity are excluded from that summary.
 
 ```bash
 python bench_bandwidth.py --mode copy --sizes-mib 512 1024 2048
 python bench_bandwidth.py --mode read --sizes-mib 512 1024 2048
+python bench_bandwidth.py --mode write --sizes-mib 512 1024 2048
 ```
 
 ```text
 copy traffic = 2 × source-array bytes
 read traffic = source-array bytes + reduction-result bytes
+write traffic = destination-array bytes
 Peak GB/s = traffic / (min_ms × 10^6)
 Median GB/s = traffic / (median_ms × 10^6)
 TB/s = GB/s / 1000
 ```
 
-MiB/GiB use powers of 1024; GB/s/TB/s use powers of 1000. In copy mode, `--sizes-mib 1024` means a 1 GiB source and a 1 GiB destination. Read and copy use different access patterns and should be compared separately. These measurements report effective global-memory bandwidth. Physical DRAM traffic may differ, and host-to-device or device-to-host PCIe/NVLink transfers are not included.
+MiB/GiB use powers of 1024; GB/s/TB/s use powers of 1000. In copy mode, `--sizes-mib 1024` means a 1 GiB source and a 1 GiB destination; in write mode it means a single 1 GiB destination. Read, write and copy use different access patterns and should be compared separately. These measurements report effective global-memory bandwidth. Physical DRAM traffic may differ, and host-to-device or device-to-host PCIe/NVLink transfers are not included.
+
+Tables measured before the headline rule changed report the copy pattern in their `memory_bandwidth` row; for those runs the faster read rate is listed in `patterns.read` in the corresponding `_runs/memory_bandwidth.json`. Tables measured before the `write` pattern was added have no `patterns.write` entry.
 
 ## How Is Time Measured?
 
@@ -338,7 +344,7 @@ Full 17-metric suite on one idle Ascend950DT_9582 of eight (64 compute units, 91
 | vector_fp8 | 5.430 | 5.429 | TFLOP/s | `unverified` |
 | vector_fp4 | - | - | TFLOP/s | `unsupported` |
 
-Every compute row is `unverified` because no final-ISA instruction auditor exists for vendor `ascend`; the rates are measured and every configuration passed numerical validation. The copy figure above is the headline bandwidth; the auxiliary read rate on the same run was 3847.693 GB/s peak (3838.059 median).
+Every compute row is `unverified` because no final-ISA instruction auditor exists for vendor `ascend`; the rates are measured and every configuration passed numerical validation. That table was produced under the earlier copy-only rule, so its `memory_bandwidth` row is the copy pattern, and it predates the `write` pattern, so it has no `patterns.write` entry. The same run's read peak, 3847.693 GB/s (median 3838.059), is what the current fastest-pattern rule reports as the headline; every rate stays in `patterns`. The native Ascend C suite in [`ascendc/`](ascendc/README.md) still reports copy as its single bandwidth figure, so its copy-to-copy comparison with this table remains valid.
 
 The Tensor ladder matches the architecture's operand widths: FP4 at 1725 TFLOP/s is 2.0× FP8/INT8 (861), which is 2.0× BF16/FP16 (430), which is 2.0× TF32 (216). IEEE FP32 at 26.97 TFLOP/s sits far below TF32 because it is not a Cube-unit rate. The card's 32 Cube cores at 1650 MHz with 4096 MAC/cycle imply a 432.5 TFLOP/s BF16 ceiling, doubling per halved operand width to 1730.2 at FP4, so every row above is 99.5–99.7% of its architectural limit. FP4's selected configuration was tile `256×128×512` at 8 blocks/SM and 1024 iterations, with zero register spills; all 36 of its configurations validated exactly (`max_abs_error` 0).
 

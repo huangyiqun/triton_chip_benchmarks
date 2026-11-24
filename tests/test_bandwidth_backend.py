@@ -28,17 +28,26 @@ class BandwidthBackendTests(unittest.TestCase):
             configurations = bandwidth.configure_launches(
                 args, {"backend": "xpu", "vendor_name": "kunlunxin"})
         self.assertEqual(configurations, [(1024, None), (4096, None)])
-        for name in ("copy_kernel", "read_kernel"):
+        source = SimpleNamespace(numel=lambda: 1031)
+        for name in ("copy_kernel", "read_kernel", "write_kernel"):
             kernel = RecordingKernel()
-            source = SimpleNamespace(numel=lambda: 1031)
             with mock.patch.object(bandwidth, name, kernel):
                 if name == "copy_kernel":
                     bandwidth.launch_copy(source, "dst", 1024, None)
-                else:
+                elif name == "read_kernel":
                     bandwidth.launch_read(source, "sink", 1024, None, "kunlunxin")
                     self.assertEqual(kernel.kwargs["CACHE_MODIFIER"], "")
+                else:
+                    bandwidth.launch_write(source, 1024, None, "float32")
+                    self.assertEqual(kernel.kwargs["DTYPE"], "float32")
             self.assertEqual(kernel.grid, (2,))
             self.assertNotIn("num_warps", kernel.kwargs)
+
+    def test_all_mode_sweeps_copy_read_and_write(self):
+        self.assertEqual(bandwidth.selected_modes(SimpleNamespace(mode="all")),
+                         ["copy", "read", "write"])
+        for mode in ("copy", "read", "write"):
+            self.assertEqual(bandwidth.selected_modes(SimpleNamespace(mode=mode)), [mode])
 
     def test_cuda_name_does_not_select_nvidia_cache_modifier(self):
         kernel = RecordingKernel()

@@ -23,7 +23,7 @@
     "device_api": "torch_npu.npu"
   },
   "smoke_only": false,
-  "measurement_policy": "Highest observed valid throughput; median from the same configuration. Capacity is reported device capacity. Bandwidth is effective copy read+write traffic with HBM-sized buffers; read rates are auxiliary details. Unsupported and not-implemented metrics have no numeric value; errors do not imply unsupported hardware.",
+  "measurement_policy": "Highest observed valid throughput; median from the same configuration. Capacity is reported device capacity. Bandwidth is the fastest HBM-sized memory pattern (copy or read) with both rates kept as details. Unsupported and not-implemented metrics have no numeric value; errors do not imply unsupported hardware.",
   "results": [
     {
       "metric": "memory_capacity",
@@ -65,8 +65,8 @@
       "precision": null,
       "unit": "GB/s",
       "status": "ok",
-      "value": 1257.8342456928697,
-      "median_value": 1254.4421205161152,
+      "value": 1483.1359403348608,
+      "median_value": 1464.0384167986688,
       "patterns": {
         "copy": {
           "value": 1257.8342456928697,
@@ -104,13 +104,14 @@
       "timing_fallback_reason": null,
       "configuration": {
         "block_size": 16384,
-        "num_warps": 4,
-        "pattern": "copy",
-        "buffer_mib": 1024,
+        "num_warps": 8,
+        "pattern": "read",
+        "buffer_mib": 2048,
         "cache_regime": "larger_than_l2",
         "peak_eligible": true
       },
-      "successful_configurations": 12,
+      "pattern": "read",
+      "successful_configurations": 24,
       "command": [
         "/usr/local/python3.11.15/bin/python",
         "-u",

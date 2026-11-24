@@ -35,18 +35,41 @@ class SuiteReportTests(unittest.TestCase):
         self.assertEqual(missing["status"], "unavailable")
         self.assertIsNone(missing["value"])
 
-    def test_bandwidth_uses_eligible_copy_and_keeps_read_auxiliary(self):
+    def test_bandwidth_uses_fastest_eligible_pattern_and_keeps_all(self):
         rows = [
             {"pattern": "copy", "peak_gbps": 11000, "gbps": 10000, "peak_eligible": False},
             {"pattern": "copy", "peak_gbps": 3500, "gbps": 3300, "peak_eligible": True},
             {"pattern": "read", "peak_gbps": 3900, "gbps": 3700, "peak_eligible": True},
+            {"pattern": "write", "peak_gbps": 3700, "gbps": 3600, "peak_eligible": True},
         ]
         result = summarize(metric("memory_bandwidth"), {"results": rows})
-        self.assertEqual(result["value"], 3500)
-        self.assertEqual(result["median_value"], 3300)
+        # The headline is the fastest HBM-sized pattern, because copy pays a
+        # read/write turnaround penalty on several accelerators. Every pattern
+        # rate stays available for comparison.
+        self.assertEqual(result["value"], 3900)
+        self.assertEqual(result["median_value"], 3700)
+        self.assertEqual(result["pattern"], "read")
         self.assertEqual(result["patterns"]["read"]["value"], 3900)
         self.assertEqual(result["patterns"]["copy"]["value"], 3500)
+        self.assertEqual(result["patterns"]["write"]["value"], 3700)
         self.assertEqual(result["status"], "ok")
+
+    def test_bandwidth_headline_can_be_write(self):
+        rows = [
+            {"pattern": "read", "peak_gbps": 3900, "gbps": 3700, "peak_eligible": True},
+            {"pattern": "write", "peak_gbps": 4100, "gbps": 3900, "peak_eligible": True},
+        ]
+        result = summarize(metric("memory_bandwidth"), {"results": rows})
+        self.assertEqual((result["value"], result["median_value"], result["pattern"]),
+                         (4100, 3900, "write"))
+
+    def test_bandwidth_headline_falls_back_to_copy_when_read_is_slower(self):
+        rows = [
+            {"pattern": "copy", "peak_gbps": 3900, "gbps": 3700, "peak_eligible": True},
+            {"pattern": "read", "peak_gbps": 3500, "gbps": 3300, "peak_eligible": True},
+        ]
+        result = summarize(metric("memory_bandwidth"), {"results": rows})
+        self.assertEqual((result["value"], result["pattern"]), (3900, "copy"))
 
     def test_cache_sensitive_or_smoke_rates_never_become_hbm_peak(self):
         for eligible, smoke in ((False, False), (True, True)):
