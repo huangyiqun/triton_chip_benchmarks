@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Search for peak achieved global-memory copy and read bandwidth with Triton."""
+"""Search for peak achieved global-memory copy, read, and write bandwidth with Triton."""
 
 import os
 
@@ -67,6 +67,29 @@ def launch_read(src, sink, block_size, num_warps, vendor_name):
     )
 
 
+@triton.jit
+def write_kernel(DST, N: tl.constexpr, BLOCK_SIZE: tl.constexpr, DTYPE: tl.constexpr):
+    offsets = tl.program_id(0).to(tl.int64) * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    values = tl.full((BLOCK_SIZE,), 1.0, DTYPE)
+    tl.store(DST + offsets, values, mask=offsets < N)
+
+
+def launch_write(dst, block_size, num_warps, dtype):
+    launch_options = {} if num_warps is None else {"num_warps": num_warps}
+    return write_kernel[(triton.cdiv(dst.numel(), block_size),)](
+        dst, dst.numel(), BLOCK_SIZE=block_size, DTYPE=dtype, **launch_options,
+    )
+
+
+def check_write(dst):
+    """Validate that every element was written, catching a partial or absent store."""
+    unwritten = int((dst != 1.0).sum().item())
+    if unwritten:
+        raise AssertionError("Write validation failed: "
+                             f"{unwritten} of {dst.numel()} elements were not written")
+    return {"correctness": "passed (full output and masked tail)"}
+
+
 def configure_launches(args, metadata):
     """XPU programs have no warps; run each block size once on that backend."""
     if is_flagtree_xpu(metadata):
@@ -110,10 +133,15 @@ def check_read(src, sink, block_size):
             "reference_device": str(validation_device)}
 
 
+def selected_modes(args):
+    """The all-mode sweep measures copy, read and write; one mode measures itself."""
+    return ["copy", "read", "write"] if args.mode == "all" else [args.mode]
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     add_common_arguments(parser)
-    parser.add_argument("--mode", choices=["copy", "read", "all"], default="all",
+    parser.add_argument("--mode", choices=["copy", "read", "write", "all"], default="all",
                         help="Access patterns to measure separately (default: all)")
     parser.add_argument("--sizes-mib", type=positive_int, nargs="+", default=[256, 512, 1024, 2048],
                         help="Size of EACH source/destination buffer in MiB")
@@ -138,13 +166,14 @@ def main():
     metadata = setup_device(args)
     device = get_device(args)
     dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[args.dtype]
+    triton_dtype = {"fp16": tl.float16, "bf16": tl.bfloat16, "fp32": tl.float32}[args.dtype]
     if args.dtype == "bf16" and metadata.get("supports_bf16") is False:
         emit_unsupported("bandwidth", metadata, args,
                          "The selected accelerator does not support BF16; choose --dtype fp16 or fp32")
         return
     element_size = torch.empty((), dtype=dtype).element_size()
     l2_bytes = metadata["l2_cache_bytes"]
-    modes = ["copy", "read"] if args.mode == "all" else [args.mode]
+    modes = selected_modes(args)
     configurations = configure_launches(args, metadata)
 
     # Exercise a masked tail independently of the aligned throughput workloads.
@@ -162,11 +191,17 @@ def main():
             launch_read(small_src, small_sink, block, warps, metadata["vendor_name"])
             check_read(small_src, small_sink, block)
             del small_sink
+        if "write" in modes:
+            small_dst = torch.full_like(small_src, float("nan"))
+            launch_write(small_dst, block, warps, triton_dtype)
+            check_write(small_dst)
+            del small_dst
     del small_src
     print("Validation: masked tails passed; every measured output is checked in full.")
-    print("Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink. "
-          "GB/s and TB/s use decimal units; peak uses the shortest timed sample.")
-    print("mode   buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s")
+    print("Copy traffic = 2 * buffer bytes; read traffic = buffer bytes + FP32 reduction sink; "
+          "write traffic = buffer bytes. GB/s and TB/s use decimal units; peak uses the "
+          "shortest timed sample.")
+    print("mode  buffer MiB   block  warps      min ms   median ms   peak GB/s  median GB/s")
     rows = []
     for size_mib in args.sizes_mib:
         buffer_bytes = size_mib * 2**20
@@ -174,7 +209,13 @@ def main():
         free_bytes = available_memory_bytes()
         # Keep room for the sink, timing cache and bounded validation temporaries.
         max_sink_bytes = triton.cdiv(n, min(args.block_sizes)) * 4 if "read" in modes else 0
-        required_bytes = (2 if "copy" in modes else 1) * buffer_bytes + max_sink_bytes
+        needs_src = "copy" in modes or "read" in modes
+        needs_dst = "copy" in modes or "write" in modes
+        buffer_count = int(needs_src) + int(needs_dst)
+        # Copy and write validation allocate one byte per element for the
+        # comparison mask; count it in the preallocation check.
+        validation_bytes = n if needs_dst else 0
+        required_bytes = buffer_count * buffer_bytes + max_sink_bytes + validation_bytes
         if free_bytes is not None and required_bytes + 512 * 2**20 > free_bytes:
             raise SystemExit(f"Insufficient free GPU memory for {size_mib} MiB buffers; "
                              "reduce --sizes-mib.")
@@ -186,8 +227,12 @@ def main():
                       if not l2_bytes else "buffer is smaller than 4x L2")
             print(f"Note: {size_mib} MiB per buffer excluded from the HBM-sized "
                   f"peak summary: {reason}.")
-        src = torch.empty(n, device=device, dtype=dtype).normal_()
-        dst = torch.empty_like(src) if "copy" in modes else None
+        src = torch.empty(n, device=device, dtype=dtype).normal_() if needs_src else None
+        if needs_dst:
+            dst = torch.empty_like(src) if src is not None else torch.empty(
+                n, device=device, dtype=dtype)
+        else:
+            dst = None
         for block, warps in configurations:
             for mode in modes:
                 sink = None
@@ -200,22 +245,30 @@ def main():
                         raise AssertionError(f"Copy validation failed: size={size_mib}, "
                                              f"block={block}, warps={warps}")
                     correctness = {"correctness": "passed (full output and masked tail)"}
-                    write_bytes = buffer_bytes
+                    read_bytes, write_bytes = buffer_bytes, buffer_bytes
+                elif mode == "write":
+                    # The same sentinel catches a store that never reached HBM.
+                    dst.fill_(float("nan"))
+                    run = lambda: launch_write(dst, block, warps, triton_dtype)
+                    run()
+                    correctness = check_write(dst)
+                    read_bytes, write_bytes = 0, buffer_bytes
                 else:
                     sink = torch.full((triton.cdiv(n, block),), float("nan"),
                                       device=device, dtype=torch.float32)
                     run = lambda: launch_read(src, sink, block, warps, metadata["vendor_name"])
                     run()
                     correctness = check_read(src, sink, block)
+                    read_bytes = buffer_bytes
                     write_bytes = sink.numel() * sink.element_size()
                 timings = measure(run, args)
-                traffic_bytes = buffer_bytes + write_bytes
+                traffic_bytes = read_bytes + write_bytes
                 gbps = traffic_bytes / (timings["median_ms"] * 1e6)
                 peak_gbps = traffic_bytes / (timings["min_ms"] * 1e6)
                 rows.append({
                     "mode": f"device_global_memory_{mode}", "pattern": mode, "dtype": args.dtype,
                     "buffer_mib": size_mib, "buffer_bytes": buffer_bytes,
-                    "elements": n, "read_bytes": buffer_bytes, "write_bytes": write_bytes,
+                    "elements": n, "read_bytes": read_bytes, "write_bytes": write_bytes,
                     "traffic_bytes": traffic_bytes, "block_size": block, "num_warps": warps,
                     "cache_regime": regime, "peak_eligible": peak_eligible,
                     "smoke_only": args.quick, **timings,
@@ -224,7 +277,7 @@ def main():
                     **correctness,
                 })
                 warps_label = str(warps) if warps is not None else "n/a"
-                print(f"{mode:4s} {size_mib:11d} {block:7d} {warps_label:>6} "
+                print(f"{mode:5s} {size_mib:10d} {block:7d} {warps_label:>6} "
                       f"{timings['min_ms']:11.6f} {timings['median_ms']:11.6f} "
                       f"{peak_gbps:11.2f} {gbps:12.2f}", flush=True)
                 del sink
@@ -239,12 +292,13 @@ def main():
               f"block={best['block_size']}, warps={best['num_warps']}.")
     if eligible:
         best = max(eligible, key=lambda row: row["peak_gbps"])
-        print(f"Highest measured HBM-sized pattern: {best['pattern']}, "
+        print(f"Headline device-memory bandwidth (memory_bandwidth metric): {best['pattern']}, "
               f"{best['peak_tbps']:.3f} TB/s (best observed timing, not a theoretical limit).")
     else:
         print("No HBM-sized peak candidate: eligibility requires a known L2 capacity, "
               "buffers >=4x L2 and a run without --quick.")
-    print("These are effective bytes requested by the kernels; read includes a block reduction. "
+    print("These are effective bytes requested by the kernels; read includes a block reduction, "
+          "and write counts only the stores. "
           "Physical DRAM traffic and other access patterns can differ.")
     emit_results("bandwidth", metadata, args, rows)
 

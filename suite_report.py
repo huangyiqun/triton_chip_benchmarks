@@ -121,7 +121,7 @@ def summarize(metric, document):
 
     if metric.key == "memory_bandwidth":
         patterns = {}
-        for pattern in ("copy", "read"):
+        for pattern in ("copy", "read", "write"):
             candidates = [row for row in successful if row.get("pattern") == pattern]
             eligible = [row for row in candidates if row.get("peak_eligible") is True
                         and not row.get("smoke_only", False)]
@@ -129,16 +129,26 @@ def summarize(metric, document):
                 best = max(eligible or candidates, key=lambda row: _rates(metric, row)[0])
                 patterns[pattern] = _row_details(metric, best)
         result["patterns"] = patterns
-        successful = [row for row in successful if row.get("pattern") == "copy"
-                      and row.get("peak_eligible") is True and not row.get("smoke_only", False)]
+        # Report the fastest HBM-sized access pattern, not the copy pattern
+        # alone. A copy issues a read and a write to the same memory bus, so on
+        # devices whose controller pays a read/write turnaround penalty the copy
+        # rate is structurally below the one-way read or write rate (Ascend
+        # 910B4: 1.26 vs 1.48/1.50 TB/s with every pattern validated). A
+        # copy-only headline then understates the device's achievable memory
+        # bandwidth. All rates remain in `patterns`, and the selected pattern is
+        # recorded below.
+        successful = [row for row in successful if row.get("peak_eligible") is True
+                      and not row.get("smoke_only", False)]
         if not successful:
             result.update(status="not_measured", reason=(
-                "No HBM-sized copy candidate: use a non-quick run with known L2 capacity "
+                "No HBM-sized bandwidth candidate: use a non-quick run with known L2 capacity "
                 "and buffers at least 4x L2; observed pattern rates remain in patterns"))
             return result
 
     best = max(successful, key=lambda row: _rates(metric, row)[0])
     result.update(status="ok", **_row_details(metric, best))
+    if metric.key == "memory_bandwidth":
+        result["pattern"] = best.get("pattern")
     if document.get("arguments", {}).get("quick") and metric.group != "Memory":
         result["smoke_only"] = True
     reason = _verification_reason(metric, result)
